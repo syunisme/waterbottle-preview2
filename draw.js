@@ -1,4 +1,4 @@
-// draw.js (最終調整版：加入 X, Y 軸整體偏移，確保與圖片線稿對齊)
+// draw.js (最終精確修正版： Path 座標 - X 軸向左, Y 軸向上)
 
 // --------------------------------------------------------
 // 1. 定義 SVG 路徑字串 (保持不變)
@@ -30,58 +30,11 @@ function resizeAndInitialize() {
     canvas.setHeight(ACTUAL_SIZE);
     canvas.clear(); 
     
-    const scaleFactor = 1; // 縮放因子為 1
+    const scaleFactor = 1; 
 
-    // ★★★ 關鍵調整：計算整體偏移量 ★★★
-    // 瓶子線稿在 1024x1024 畫布中的實際起始位置
-    const INKSCAPE_BOTTLE_X_START = 340; // 從圖片觀察，瓶身左側線條大約在這個位置
-    const INKSCAPE_BOTTLE_Y_START = 100; // 從圖片觀察，瓶蓋頂部線條大約在這個位置
-
-    // Path 的最小 X/Y 座標 (從 D 屬性中觀察到的第一個座標)
-    const PATH_X_START = 435.5; 
-    const PATH_Y_START = 296.2; // 提帶的 Y 座標最低 (最靠上)
-    
-    // 計算需要移動多少來對齊線稿
-    const offsetX = INKSCAPE_BOTTLE_X_START - PATH_X_START; // 如果 Path 在線稿右側，這會是負值
-    const offsetY = INKSCAPE_BOTTLE_Y_START - PATH_Y_START; // 如果 Path 在線稿下方，這會是負值
-    
-    // 經計算 (340-435.5 = -95.5), (100-296.2 = -196.2)
-    // 由於您的 Path 座標 (435, 296) 是相對畫布左上角的，我們需要將 Path 往左上移動。
-    // 這裡使用 Path 的原始座標來定位，不需要額外計算偏移。
-    // Path 座標：435, 305。  線稿起始：~340, ~100。
-    // 修正： Fabric.js 讀取 Path 時會自動將 M (move to) 的座標作為起始點。
-    // 我們需要將 Path 視為一個整體，並將它移動到 (0, 0) 附近，然後再定位。
-    
-    // 由於 Fabric.js Path 物件已經包含了絕對座標，我們只需將其移動到預期位置。
-    // 重新評估：最好的方法是**不使用** Fabric.js 的 `left`/`top` 屬性移動 Path，而是**直接修改 Path 座標**，但這太複雜。
-    
-    // ★★★ 最終決定：我們只需要讓所有 Path 的 X/Y 座標歸零！ ★★★
-    // Fabric.js 有一個 Path 輔助功能，但我們需要手動計算每個 Path 相對於自身的 X/Y 偏移。
-    
-    // 讓所有 Path 座標歸零
-    const normalizePathString = (pathString, xOffset, yOffset) => {
-        // 僅處理 M 和 L 相關的絕對座標 (這裡假設 M/L/H/V 都是絕對座標)
-        return pathString.replace(/([A-Za-z])\s*([^A-Za-z]*)/g, (match, command, coordinates) => {
-            if (command.toUpperCase() === 'M' || command.toUpperCase() === 'L') {
-                const parts = coordinates.trim().split(/[\s,]+/).map(Number);
-                if (parts.length >= 2) {
-                    const newX = parts[0] + xOffset;
-                    const newY = parts[1] + yOffset;
-                    return `${command} ${newX} ${newY}`;
-                }
-            }
-            // 對 H, V, C, S 等不進行處理
-            return match;
-        });
-    };
-    
-    // 最終決定：由於您的 Path 幾乎都是絕對座標 M/L/V/H，直接使用 Fabric.js 的 `left`/`top` 進行微調才是最簡單且穩定的方法。
-    // 觀察結果：Path 繪製的內容相對於線稿**向左上方移動了**。
-    // 我們需要將 Path 往右下移動來對齊瓶身。
-
-    // 重新定義偏移量 (根據目測結果微調)
-    const GLOBAL_OFFSET_X = 90; 
-    const GLOBAL_OFFSET_Y = 200; 
+    // ★★★ 關鍵調整：精確偏移量 - 往左移動 35，往上移動 200 ★★★
+    const GLOBAL_OFFSET_X = -35; 
+    const GLOBAL_OFFSET_Y = -200; 
 
     // 創建 Path 的輔助函數
     const createPath = (pathString, options) => {
@@ -94,7 +47,7 @@ function resizeAndInitialize() {
         path.set({
             scaleX: scaleFactor,
             scaleY: scaleFactor,
-            // ★★★ 關鍵：應用視覺偏移，將 Path 往右下移動 ★★★
+            // 應用整體偏移量
             left: path.left + GLOBAL_OFFSET_X,
             top: path.top + GLOBAL_OFFSET_Y
         });
@@ -111,18 +64,18 @@ function resizeAndInitialize() {
     // 3. 提帶顏色層
     handleColorPath = createPath(handlePathString, { fill: colorHandle.value, selectable: false, opacity: 0.9 });
     
-    // 4. 裁剪路徑 (設計區域) 
+    // 4. 裁剪路徑 (設計區域) - 必須確保裁剪 Path 的位置也應用了偏移
     designAreaClipPath = createPath(designAreaPathString, {
         absolutePosition: true,
         selectable: false,
         evented: false,
         fill: 'transparent', 
-        // 裁剪路徑本身也必須應用偏移！
-        left: designAreaClipPath ? designAreaClipPath.left + GLOBAL_OFFSET_X : GLOBAL_OFFSET_X, 
-        top: designAreaClipPath ? designAreaClipPath.top + GLOBAL_OFFSET_Y : GLOBAL_OFFSET_Y, 
+        // 由於 createPath 已經應用了 left/top 偏移，這裡無需再次手動設置
     });
     
-    // ... (加入並排序圖層的程式碼保持不變) ...
+    // ======================================
+    // 添加並排序圖層
+    // ======================================
     canvas.add(bodyColorPath, capColorPath, handleColorPath);
     
     bodyColorPath.sendToBack();
@@ -136,47 +89,71 @@ function resizeAndInitialize() {
 // --------------------------------------------------------
 // 4. 綁定事件：顏色切換 (保持不變)
 // --------------------------------------------------------
-// ... (程式碼省略，保持不變)
+function updatePathColor() {
+    if (capColorPath) capColorPath.set('fill', colorCap.value);
+    if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
+    if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
+    canvas.renderAll();
+}
+
+colorBody.addEventListener("input", updatePathColor);
+colorCap.addEventListener("input", updatePathColor);
+colorHandle.addEventListener("input", updatePathColor);
+
 
 // --------------------------------------------------------
-// 5. 圖片上傳 (使用固定座標)
+// 5. 圖片上傳 (使用修正後的起始座標)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
-    // ... (程式碼省略) ...
-    fabric.Image.fromURL(dataURL, function(img) {
-        // ... (程式碼省略) ...
-        
-        img.set({
-            uploaded: true, 
-            scaleX: 0.25, scaleY: 0.25, 
-            // 由於 Path 被移動了 (右下移動 90, 200)，所以圖片起始點也要相應調整
-            left: 450 + 90, // 初始位置 + 偏移
-            top: 500 + 200,
-            hasControls: true, 
-            clipPath: designAreaClipPath 
-        });
+    const file = e.target.files[0];
+    if (!file) return;
 
-        canvas.add(img);
-        img.bringToFront(); 
-        canvas.renderAll();
-    });
+    const reader = new FileReader();
+    reader.onload = function(f) {
+        const dataURL = f.target.result;
+
+        fabric.Image.fromURL(dataURL, function(img) {
+            canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
+            
+            // 由於 Path 被往左上移動了 (-35, -200)，所以圖片起始點也要相應調整
+            // (450 + 435 - 35) = 850, (500 + 296 - 200) = 596
+            // 這裡使用一個對齊瓶身中心的視覺估計值
+            const GLOBAL_OFFSET_X = -35; 
+            const GLOBAL_OFFSET_Y = -200; 
+
+            img.set({
+                uploaded: true, 
+                scaleX: 0.25, scaleY: 0.25, 
+                // 圖片和文字的起始座標應設置在設計區域（Path繪製範圍）的中心附近
+                left: 512, // X軸中心 (1024/2)
+                top: 550, // Y軸的合適位置
+                hasControls: true, 
+                clipPath: designAreaClipPath 
+            });
+
+            canvas.add(img);
+            img.bringToFront(); 
+            canvas.renderAll();
+        });
+    };
+    reader.readAsDataURL(file);
 });
 
 
 // --------------------------------------------------------
-// 6. 文字輸入 (使用固定座標)
+// 6. 文字輸入 (使用修正後的起始座標)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
-    // ... (程式碼省略) ...
+    canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
     
     if (textInput.value) {
         const textObj = new fabric.Text(textInput.value, {
             textObject: true, 
             fontSize: 60, 
             fill: 'black',
-            // 由於 Path 被移動了，文字起始點也要相應調整
-            left: 400 + 90,
-            top: 700 + 200,
+            // 文字起始點設置在設計區域中心附近
+            left: 512, 
+            top: 750, 
             hasControls: true,
             clipPath: designAreaClipPath 
         });
@@ -190,4 +167,45 @@ textInput.addEventListener("input", () => {
 // --------------------------------------------------------
 // 7, 8, 9 保持不變
 // --------------------------------------------------------
-// ... (清除圖案、下載設計圖、基礎初始化 程式碼省略，保持不變)
+clearBtn.addEventListener("click", () => {
+    canvas.getObjects().filter(obj => obj.uploaded || obj.textObject).forEach(obj => canvas.remove(obj));
+    textInput.value = "";
+    imgUpload.value = "";
+    canvas.renderAll();
+});
+
+saveBtn.addEventListener("click", () => {
+    const originalOpacityBody = bodyColorPath.opacity;
+    const originalOpacityCap = capColorPath.opacity;
+    const originalOpacityHandle = handleColorPath.opacity;
+
+    bodyColorPath.set({ opacity: 1 });
+    capColorPath.set({ opacity: 1 });
+    handleColorPath.set({ opacity: 1 });
+
+    canvas.renderAll();
+
+    const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = 'custom_bottle_design.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    bodyColorPath.set({ opacity: originalOpacityBody });
+    capColorPath.set({ opacity: originalOpacityCap });
+    handleColorPath.set({ opacity: originalOpacityHandle });
+    canvas.renderAll();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (bottleImg.complete) {
+        resizeAndInitialize();
+    } else {
+        bottleImg.onload = resizeAndInitialize;
+    }
+    window.addEventListener("resize", () => {
+        canvas.renderAll();
+    });
+});
