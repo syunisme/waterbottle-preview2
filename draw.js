@@ -1,4 +1,4 @@
-// draw.js (最終版：整合 Fabric.js、分區著色、圖片裁剪和下載功能)
+// draw.js (最終修正版：修正 Path 數據和縮放邏輯)
 
 // --------------------------------------------------------
 // 1. 初始化 Fabric.js Canvas 與 DOM 元素
@@ -14,23 +14,29 @@ const colorHandle = document.getElementById("colorHandle");
 const imgUpload = document.getElementById("imgUpload");
 const textInput = document.getElementById("textInput");
 const clearBtn = document.getElementById("clearBtn");
-const saveBtn = document.getElementById("saveBtn"); // 新增的下載按鈕
+const saveBtn = document.getElementById("saveBtn"); // 下載按鈕
 
 // --------------------------------------------------------
-// 2. 曲線 Path Data (基於您的原生程式碼座標)
+// 2. 曲線 Path Data (針對您的 3D 線稿圖估算)
+//    Path 數據是基於畫布尺寸 400x600 估算的。
 // --------------------------------------------------------
 function getFabricPath(type) {
-    // 座標寬度約 300px
     switch (type) {
         case 'cap':
-            return 'M 90 40 Q 150 -10, 210 40 Q 230 90, 210 130 L 90 130 Q 70 90, 90 40 Z';
+            // 瓶蓋 (上半部分): 寬度約 140px，高度約 70px
+            return 'M 130 50 Q 200 10, 270 50 L 270 120 C 250 140, 150 140, 130 120 Z';
+
         case 'body':
-            return 'M 70 140 Q 55 170, 55 210 L 55 500 Q 55 540, 90 560 L 215 560 Q 245 540, 245 500 L 245 210 Q 245 170, 230 140 Z';
+            // 瓶身主體：可客製化區域 (圓柱體部分)
+            // 寬度約 120px，高度約 400px
+            return 'M 140 140 L 140 550 C 140 560, 150 570, 200 570 C 250 570, 260 560, 260 550 L 260 140 Z';
+            
         case 'strap':
-            // 組合 Path: 直條帶子 + 上下兩個圓環
-            return 'M 150 180 L 172 180 L 172 430 L 150 430 Z ' + 
-                   'M 186 460 A 25 25 0 1 1 136 460 A 25 25 0 1 1 186 460 Z ' + 
-                   'M 196 515 A 35 35 0 1 1 126 515 A 35 35 0 1 1 196 515 Z';
+            // 提帶形狀：長條部分和底部的圓環
+            // 長條寬度約 15px
+            return 'M 190 145 L 205 145 L 205 530 L 190 530 Z ' + 
+                   // 底部圓環 (簡單圓形)
+                   'M 197 545 A 15 15 0 1 1 197 545';
         default:
             return '';
     }
@@ -40,16 +46,14 @@ function getFabricPath(type) {
 // 3. 初始化 Canvas 尺寸與 Mask 物件
 // --------------------------------------------------------
 function resizeAndInitialize() {
-    // 1. 取得線稿圖片的實際顯示尺寸
     const rect = bottleImg.getBoundingClientRect();
     canvas.setWidth(rect.width);
     canvas.setHeight(rect.height);
     
-    // 2. 清除 Canvas 內容，重新繪製
     canvas.clear(); 
 
-    // 3. 計算縮放比例 (您的 Path 座標基於 300px 寬度)
-    const scale = rect.width / 300; 
+    // ★ 修正縮放比例：由於 Path 數據現在是基於 400px 寬度估算的，所以以此為基準
+    const scale = rect.width / 400; // 以前是 / 300
     
     // ======================================
     // A. 創建瓶身裁剪路徑 (用於用戶圖案 Clipping)
@@ -93,7 +97,7 @@ function resizeAndInitialize() {
 }
 
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換
+// 4. 綁定事件：顏色切換 (保持不變)
 // --------------------------------------------------------
 function updateMaskColor() {
     if (capMask) capMask.set('fill', colorCap.value);
@@ -108,7 +112,7 @@ colorHandle.addEventListener("input", updateMaskColor);
 
 
 // --------------------------------------------------------
-// 5. 綁定事件：圖片上傳 (實作圖片裁剪)
+// 5. 綁定事件：圖片上傳 (實作圖片裁剪) (保持不變)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -146,7 +150,7 @@ imgUpload.addEventListener("change", e => {
 });
 
 // --------------------------------------------------------
-// 6. 綁定事件：文字輸入 (實作文字裁剪)
+// 6. 綁定事件：文字輸入 (實作文字裁剪) (保持不變)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
     // 移除所有舊的文字物件
@@ -172,7 +176,7 @@ textInput.addEventListener("input", () => {
 
 
 // --------------------------------------------------------
-// 7. 修正：下載設計圖功能 (配合 Z-Index 對調)
+// 7. 修正：下載設計圖功能 (配合 Z-Index 對調) (保持不變)
 // --------------------------------------------------------
 saveBtn.addEventListener('click', () => {
     // 1. 為了下載，我們必須臨時將 HTML 的線稿圖片作為 Fabric Canvas 的背景
@@ -216,7 +220,7 @@ saveBtn.addEventListener('click', () => {
 
 
 // --------------------------------------------------------
-// 8. 清除按鈕
+// 8. 清除按鈕 (保持不變)
 // --------------------------------------------------------
 clearBtn.addEventListener("click", () => {
     // 移除所有用戶上傳的圖片和文字
@@ -230,7 +234,7 @@ clearBtn.addEventListener("click", () => {
 });
 
 // --------------------------------------------------------
-// 9. 首次初始化
+// 9. 首次初始化 (保持不變)
 // --------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
     // 確保圖片載入完成後才執行初始化 (用於計算比例和尺寸)
