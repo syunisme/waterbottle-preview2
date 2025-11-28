@@ -1,4 +1,4 @@
-// draw.js (最終版：零偏移，完全依賴 1024x1024 內部畫布和 CSS 對齊)
+// draw.js (最終修訂版：重新引入精確偏移量，解決座標歸零問題)
 
 // --------------------------------------------------------
 // 1. 定義 SVG 路徑字串 (保持不變)
@@ -15,29 +15,47 @@ const designAreaPathString = "m 447.66355,338.31776 -13.08411,528.97196 88.78505
 const canvas = new fabric.Canvas('designCanvas');
 const bottleImg = document.getElementById("bottle"); 
 let bodyColorPath, capColorPath, handleColorPath, designAreaClipPath; 
-// ... (DOM 元素宣告省略)
+const colorBody = document.getElementById("colorBody"); 
+const colorCap = document.getElementById("colorCap"); 
+const colorHandle = document.getElementById("colorHandle");
+const imgUpload = document.getElementById("imgUpload"); 
+const textInput = document.getElementById("textInput"); 
+const clearBtn = document.getElementById("clearBtn");
+const saveBtn = document.getElementById("saveBtn");
 
 
 // --------------------------------------------------------
-// 3. 初始化 Canvas 尺寸與顏色層 (核心修正區 - 零偏移)
+// 3. 初始化 Canvas 尺寸與顏色層 (核心修正區 - 使用精確偏移)
 // --------------------------------------------------------
 function resizeAndInitialize() {
     const ACTUAL_SIZE = 1024; 
     
-    // 內部畫布固定為 1024x1024
     canvas.setWidth(ACTUAL_SIZE);
     canvas.setHeight(ACTUAL_SIZE);
     canvas.clear(); 
     
-    // 創建 Path 的輔助函數 (不應用任何偏移)
+    // ★★★ 最終精確偏移量：向左移動 95，向上移動 196 ★★★
+    // 讓 Path 的實際繪製區域從 (434, 296) 移到線稿瓶身起點 (340, 100)
+    const FINAL_OFFSET_X = -95; 
+    const FINAL_OFFSET_Y = -196; 
+
+    // 創建 Path 的輔助函數 (應用固定偏移)
     const createPath = (pathString, options) => {
-        return new fabric.Path(pathString, {
+        const path = new fabric.Path(pathString, {
             ...options,
             scaleX: 1, scaleY: 1, 
             originX: 'left',
             originY: 'top',
-            // 不設置 left/top，使用 Path 原始 M 座標
         });
+        
+        // **關鍵修正**：應用偏移量。Fabric.js Path 的 left/top 初始值來自 Path 內部的 M 座標。
+        // 我們將其 left/top 屬性設定為 (Path 初始 left + 偏移量)
+        path.set({
+            left: path.left + FINAL_OFFSET_X, 
+            top: path.top + FINAL_OFFSET_Y
+        });
+
+        return path;
     };
     
     // 1. 創建所有 Path
@@ -60,28 +78,49 @@ function resizeAndInitialize() {
 
 
 // --------------------------------------------------------
+// 4. 綁定事件：顏色切換 (保持不變)
+// --------------------------------------------------------
+function updatePathColor() {
+    if (capColorPath) capColorPath.set('fill', colorCap.value);
+    if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
+    if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
+    canvas.renderAll();
+}
+colorBody.addEventListener("input", updatePathColor);
+colorCap.addEventListener("input", updatePathColor);
+colorHandle.addEventListener("input", updatePathColor);
+
+
+// --------------------------------------------------------
 // 5. 圖片上傳 (使用 1024 畫布的中心點座標)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
-    // ... (FileReader 程式碼省略) ...
-    fabric.Image.fromURL(dataURL, function(img) {
-        canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
-        
-        img.set({
-            uploaded: true, 
-            scaleX: 0.25, scaleY: 0.25, 
-            // 圖片和文字的起始座標應設置在 Path 繪製範圍的中心附近
-            left: 512, 
-            top: 550, 
-            hasControls: true, 
-            clipPath: designAreaClipPath 
-        });
+    const file = e.target.files[0];
+    if (!file) return;
 
-        canvas.add(img);
-        img.bringToFront(); 
-        canvas.renderAll();
-    });
-    // ... (FileReader 程式碼省略) ...
+    const reader = new FileReader();
+    reader.onload = function(f) {
+        const dataURL = f.target.result;
+
+        fabric.Image.fromURL(dataURL, function(img) {
+            canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
+            
+            img.set({
+                uploaded: true, 
+                scaleX: 0.25, scaleY: 0.25, 
+                // 將圖案放置在瓶身設計區域的中心附近
+                left: 512, 
+                top: 550, 
+                hasControls: true, 
+                clipPath: designAreaClipPath 
+            });
+
+            canvas.add(img);
+            img.bringToFront(); 
+            canvas.renderAll();
+        });
+    };
+    reader.readAsDataURL(file);
 });
 
 
@@ -89,6 +128,7 @@ imgUpload.addEventListener("change", e => {
 // 6. 文字輸入 (使用 1024 畫布的中心點座標)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
+    // 移除現有的文字物件
     canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
     
     if (textInput.value) {
@@ -96,6 +136,7 @@ textInput.addEventListener("input", () => {
             textObject: true, 
             fontSize: 60, 
             fill: 'black',
+            // 將文字放置在設計區域的下方中心附近
             left: 512, 
             top: 750, 
             hasControls: true,
@@ -109,19 +150,42 @@ textInput.addEventListener("input", () => {
 
 
 // --------------------------------------------------------
-// 4, 7, 8, 9 保持不變 (顏色切換、清除、下載、初始化)
+// 7, 8, 9 清除、下載、基礎初始化 (保持不變)
 // --------------------------------------------------------
-function updatePathColor() {
-    if (capColorPath) capColorPath.set('fill', colorCap.value);
-    if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
-    if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
+clearBtn.addEventListener("click", () => {
+    canvas.getObjects().filter(obj => obj.uploaded || obj.textObject).forEach(obj => canvas.remove(obj));
+    textInput.value = "";
+    imgUpload.value = "";
     canvas.renderAll();
-}
-colorBody.addEventListener("input", updatePathColor);
-colorCap.addEventListener("input", updatePathColor);
-colorHandle.addEventListener("input", updatePathColor);
+});
 
-// ... (其他函數保持不變) ...
+saveBtn.addEventListener("click", () => {
+    // 為了下載圖案清晰，暫時將透明度設為 1
+    const originalOpacityBody = bodyColorPath.opacity;
+    const originalOpacityCap = capColorPath.opacity;
+    const originalOpacityHandle = handleColorPath.opacity;
+
+    bodyColorPath.set({ opacity: 1 });
+    capColorPath.set({ opacity: 1 });
+    handleColorPath.set({ opacity: 1 });
+
+    canvas.renderAll();
+
+    const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = 'custom_bottle_design.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // 恢復原始透明度
+    bodyColorPath.set({ opacity: originalOpacityBody });
+    capColorPath.set({ opacity: originalOpacityCap });
+    handleColorPath.set({ opacity: originalOpacityHandle });
+    canvas.renderAll();
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     if (bottleImg.complete) {
         resizeAndInitialize();
