@@ -1,7 +1,7 @@
-// draw.js (最終完整版：四個 Path 均已更新為 Inkscape 提取字串，座標最穩定)
+// draw.js (最終完整版：所有 Path 均已更新)
 
 // --------------------------------------------------------
-// 1. 定義 SVG 路徑字串 (★★ 所有 Path 均已更新 ★★)
+// 1. 定義 SVG 路徑字串 (★★ 所有 Path 均已更新為 Inkscape 提取字串 ★★)
 // --------------------------------------------------------
 
 // 您的精確瓶蓋路徑 (Cap Path)
@@ -13,18 +13,19 @@ const bodyPathString = "m 434.63497,309.4601 -25.20882,13.90832 v 554.59423 l 26
 // 您的精確提帶路徑 (Handle Path)
 const handlePathString = "m 546.72897,296.26168 -27.1028,2.80374 3.73832,10.28037 23.36448,2.80374 1.86916,449.53271 -8.41121,14.95327 24.29906,22.42991 0.93458,10.28037 -20.56075,21.49533 5.60748,27.10281 22.42991,11.21495 22.4299,-11.21495 3.73832,-24.29907 -5.60748,-15.88785 -12.14953,-6.54206 -2.80374,-13.08411 22.42991,-14.95327 1.86916,-18.69159 -7.47664,-6.54205 5.60748,-87.85047 -2.80374,-82.24299 -3.73832,-105.60748 -1.86916,-96.26168 -6.54205,-73.83178 3.73832,-7.47663 1.86916,-0.93458 -14.0187,-7.47664 z";
 
-// ★★★ 您的精確設計區域路徑 (Design Area Path) ★★★
+// 您的精確設計區域路徑 (Design Area Path)
 const designAreaPathString = "m 447.66355,338.31776 -13.08411,528.97196 88.78505,-4.6729 15.88785,-523.36448 z"; 
 
 
 // --------------------------------------------------------
-// 2. 初始化 Fabric.js Canvas 與 DOM 元素 (略)
+// 2. 初始化 Fabric.js Canvas 與 DOM 元素
 // --------------------------------------------------------
 const canvas = new fabric.Canvas('designCanvas');
 const bottleImg = document.getElementById("bottle"); 
 let bodyColorPath, capColorPath, handleColorPath; 
 let designAreaClipPath; 
 
+// DOM 元素
 const colorBody = document.getElementById("colorBody");
 const colorCap = document.getElementById("colorCap");
 const colorHandle = document.getElementById("colorHandle");
@@ -33,27 +34,28 @@ const textInput = document.getElementById("textInput");
 const clearBtn = document.getElementById("clearBtn");
 const saveBtn = document.getElementById("saveBtn"); 
 
+
 // --------------------------------------------------------
 // 3. 初始化 Canvas 尺寸與顏色層 (核心：使用 fabric.Path)
 // --------------------------------------------------------
 function resizeAndInitialize() {
+    // 獲取圖片的實際 CSS 寬高，並應用到 Canvas 內部
     const rect = bottleImg.getBoundingClientRect();
     canvas.setWidth(rect.width);
     canvas.setHeight(rect.height);
     canvas.clear(); 
     
-    // 創建 Path 的輔助函數 (只需要處理 CSS 縮放)
+    // 圖片原始尺寸 (Inkscape 畫布尺寸)
+    const ACTUAL_IMAGE_WIDTH = 1024; 
+    const scaleFactor = rect.width / ACTUAL_IMAGE_WIDTH; // 計算 CSS 縮放比例
+    
+    // 創建 Path 的輔助函數
     const createPath = (pathString, options) => {
         const path = new fabric.Path(pathString, {
             ...options,
             originX: 'left',
             originY: 'top',
         });
-        
-        // 為了讓 Path 準確對齊到圖片的 CSS 尺寸，我們需要計算 CSS 縮放比例
-        // 假設圖片原始寬度是 1024px，CSS 寬度是 rect.width
-        const ACTUAL_IMAGE_WIDTH = 1024; // 根據您提供的資訊
-        const scaleFactor = rect.width / ACTUAL_IMAGE_WIDTH;
         
         // 應用 CSS 縮放校正
         path.set({
@@ -64,7 +66,7 @@ function resizeAndInitialize() {
         return path;
     };
     
-    // 1. 瓶身顏色層
+    // 1. 瓶身顏色層 (底層)
     bodyColorPath = createPath(bodyPathString, { 
         fill: colorBody.value, 
         selectable: false, 
@@ -85,7 +87,7 @@ function resizeAndInitialize() {
         opacity: 0.9
     });
     
-    // 4. 裁剪路徑 (設計區域) 
+    // 4. 裁剪路徑 (設計區域) - 用於裁剪圖案和文字
     designAreaClipPath = createPath(designAreaPathString, {
         absolutePosition: true,
         selectable: false,
@@ -98,6 +100,7 @@ function resizeAndInitialize() {
     // ======================================
     canvas.add(bodyColorPath, capColorPath, handleColorPath);
     
+    // 調整圖層順序
     bodyColorPath.sendToBack();
     capColorPath.bringToFront();
     handleColorPath.bringToFront(); 
@@ -107,7 +110,7 @@ function resizeAndInitialize() {
 
 
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換 (更新 Path 顏色) (略)
+// 4. 綁定事件：顏色切換 (更新 Path 顏色)
 // --------------------------------------------------------
 function updatePathColor() {
     if (capColorPath) capColorPath.set('fill', colorCap.value);
@@ -122,7 +125,7 @@ colorHandle.addEventListener("input", updatePathColor);
 
 
 // --------------------------------------------------------
-// 5. 圖片上傳 (應用 Path 裁剪) (略)
+// 5. 圖片上傳 (應用 Path 裁剪)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -133,13 +136,13 @@ imgUpload.addEventListener("change", e => {
         const dataURL = f.target.result;
 
         fabric.Image.fromURL(dataURL, function(img) {
+            // 清除舊的圖案
             canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
             
             img.set({
                 uploaded: true, 
-                // 這裡的 scaleX/scaleY, left/top 可能需要根據設計區 Path 進行微調
-                scaleX: 0.25, scaleY: 0.25, 
-                left: canvas.getWidth() * 0.35, 
+                scaleX: 0.25, scaleY: 0.25, // 初始縮放
+                left: canvas.getWidth() * 0.35, // 初始位置微調
                 top: canvas.getHeight() * 0.45,
                 hasControls: true, 
                 clipPath: designAreaClipPath // 應用精確 Path 裁剪
@@ -153,10 +156,12 @@ imgUpload.addEventListener("change", e => {
     reader.readAsDataURL(file);
 });
 
+
 // --------------------------------------------------------
-// 6. 文字輸入 (應用 Path 裁剪) (略)
+// 6. 文字輸入 (應用 Path 裁剪)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
+    // 清除舊的文字
     canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
     
     if (textInput.value) {
@@ -177,13 +182,62 @@ textInput.addEventListener("input", () => {
 
 
 // --------------------------------------------------------
-// 7. 8. 9. 基礎初始化
+// 7. 清除圖案/文字
+// --------------------------------------------------------
+clearBtn.addEventListener("click", () => {
+    canvas.getObjects().filter(obj => obj.uploaded || obj.textObject).forEach(obj => canvas.remove(obj));
+    textInput.value = "";
+    imgUpload.value = "";
+    canvas.renderAll();
+});
+
+
+// --------------------------------------------------------
+// 8. 下載設計圖 (可選)
+// --------------------------------------------------------
+saveBtn.addEventListener("click", () => {
+    // 暫時移除顏色層的不透明度，以便輸出清晰的設計圖
+    const originalOpacityBody = bodyColorPath.opacity;
+    const originalOpacityCap = capColorPath.opacity;
+    const originalOpacityHandle = handleColorPath.opacity;
+
+    bodyColorPath.set({ opacity: 1 });
+    capColorPath.set({ opacity: 1 });
+    handleColorPath.set({ opacity: 1 });
+
+    canvas.renderAll();
+
+    // 輸出為 PNG 檔案
+    const dataURL = canvas.toDataURL({
+        format: 'png',
+        quality: 1
+    });
+
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = 'custom_bottle_design.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // 恢復顏色層的不透明度
+    bodyColorPath.set({ opacity: originalOpacityBody });
+    capColorPath.set({ opacity: originalOpacityCap });
+    handleColorPath.set({ opacity: originalOpacityHandle });
+    canvas.renderAll();
+});
+
+
+// --------------------------------------------------------
+// 9. 基礎初始化
 // --------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+    // 確保圖片載入完成才初始化 Canvas
     if (bottleImg.complete) {
         resizeAndInitialize();
     } else {
         bottleImg.onload = resizeAndInitialize;
     }
+    // 響應式：視窗大小改變時重新初始化，確保對齊
     window.addEventListener("resize", resizeAndInitialize);
 });
