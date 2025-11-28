@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>水壺客製化設計</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            gap: 30px; 
+            padding: 30px; 
+            background-color: #f4f4f4;
+        }
+        
+        /* 預覽區容器：負責疊放 Canvas 和線稿圖片 */
+        #preview-container { 
+            position: relative; 
+            width: 400px; /* 預覽區寬度 */
+            height: 600px; /* 預覽區高度 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background-color: white;
+            border-radius: 8px;
+        }
+        
+        /* 線稿圖片：必須在 Canvas 之上 (Z-Index: 2) */
+        #bottle { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            z-index: 2; 
+        }
+        
+        /* Fabric.js Canvas：放置顏色遮罩、用戶圖案 (Z-Index: 1) */
+        #designCanvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            z-index: 1; 
+        }
+        
+        /* 控制面板樣式 */
+        .controls { 
+            width: 300px; 
+            padding: 20px; 
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .controls div { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        input[type="color"] { width: 100%; height: 35px; border: none; border-radius: 4px; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { 
+            width: 100%; 
+            padding: 10px; 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background-color: #0056b3; }
+    </style>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+</head>
+<body>
+
+    <div class="controls">
+        <h2>🎨 客製化選項</h2>
+        
+        <div>
+            <label for="colorCap">瓶蓋顏色:</label>
+            <input type="color" id="colorCap" value="#cccccc">
+        </div>
+        
+        <div>
+            <label for="colorHandle">提帶顏色:</label>
+            <input type="color" id="colorHandle" value="#000000">
+        </div>
+        
+        <div>
+            <label for="colorBody">瓶身顏色:</label>
+            <input type="color" id="colorBody" value="#99ccff">
+        </div>
+
+        <div>
+            <label for="imgUpload">上傳客製化圖案:</label>
+            <input type="file" id="imgUpload" accept="image/*">
+        </div>
+
+        <div>
+            <label for="textInput">輸入文字:</label>
+            <input type="text" id="textInput" placeholder="輸入您的文字">
+        </div>
+
+        <button id="clearBtn">清除圖案/文字</button>
+    </div>
+
+    <div id="preview-container">
+        <img id="bottle" src="waterbottle.jpg" alt="Water Bottle Wireframe">
+        
+        <canvas id="designCanvas" width="400" height="600"></canvas>
+    </div>
+    
+    <script src="draw.js"></script> 
+
+</body>
+</html>
