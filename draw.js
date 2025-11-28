@@ -1,7 +1,7 @@
-// draw.js (最終 Group 修正版：使用 Group 確保對齊)
+// draw.js - 最終穩定對齊版本 (偏移量應用於 Group 內的子 Path)
 
 // --------------------------------------------------------
-// 1. 定義 SVG 路徑字串 (保持不變)
+// 1. SVG 路徑定義 (來自 Inkscape 導出的原始座標)
 // --------------------------------------------------------
 const capPathString = "m 435.51402,305.60748 86.91589,3.73831 -0.93458,-12.14953 h 67.28972 l -0.93458,12.14953 17.75701,1.86916 -3.73832,-88.78504 -18.69159,-9.3458 -0.93458,-20.56075 -5.60748,-5.60747 h -11.21495 l -8.41121,-37.38318 -31.77571,-8.41121 -44.85981,2.80373 -14.95327,16.82243 -3.73832,35.51402 -13.08411,6.54206 -0.93458,10.28037 -10.28037,7.47664 v 48.59813 z";
 const bodyPathString = "m 434.63497,309.4601 -25.20882,13.90832 v 554.59423 l 26.07809,23.47029 73.01868,8.6927 81.71138,-4.34635 32.16298,-17.3854 4.34635,-16.51613 0.86927,-546.7708 -20.86248,-15.64686 h -19.12393 l 13.03904,450.28184 4.34635,16.51612 -25.20882,24.33956 2.60781,13.90832 15.64685,12.16978 v 26.0781 l -14.77758,13.90832 -22.60102,-0.86927 -19.12394,-29.55518 23.47029,-27.81664 v -7.82343 l -19.99321,-18.25467 -1.73854,-18.25466 9.56197,-3.47708 -4.34635,-445.06622 z";
@@ -10,11 +10,14 @@ const designAreaPathString = "m 447.66355,338.31776 -13.08411,528.97196 88.78505
 
 
 // --------------------------------------------------------
-// 2. 初始化 Fabric.js Canvas 與 DOM 元素 (略)
+// 2. 變數宣告與 DOM 元素獲取
 // --------------------------------------------------------
 const canvas = new fabric.Canvas('designCanvas');
-const bottleImg = document.getElementById("bottle"); 
+// const bottleImg = document.getElementById("bottle"); // 線稿圖層
 let bodyColorPath, capColorPath, handleColorPath, designAreaClipPath; 
+let designImage, designText; // 設計圖案和文字物件
+
+// 控制項
 const colorBody = document.getElementById("colorBody"); 
 const colorCap = document.getElementById("colorCap"); 
 const colorHandle = document.getElementById("colorHandle");
@@ -27,7 +30,7 @@ let pathGroup; // 宣告 Group 變數
 
 
 // --------------------------------------------------------
-// 3. 初始化 Canvas 尺寸與顏色層 (核心 Group 修正區)
+// 3. 初始化 Canvas (核心對齊邏輯)
 // --------------------------------------------------------
 function resizeAndInitialize() {
     const ACTUAL_SIZE = 1024; 
@@ -36,66 +39,178 @@ function resizeAndInitialize() {
     canvas.setHeight(ACTUAL_SIZE);
     canvas.clear(); 
     
-    // ★★★ 精確偏移量 (只應用在 Group 上) ★★★
-    // 讓整個 Path Group 從 (434, 296) 移到線稿起點 (340, 100)
-    const FINAL_OFFSET_X = -40; 
+    // ★★★ 最終精確偏移量 ★★★
+    // 讓 Path 內的 M 座標 (434, 296) 能夠移動到線稿的視覺起點 (約 340, 100)
+    const FINAL_OFFSET_X = -95; 
     const FINAL_OFFSET_Y = -196; 
 
-    // 創建 Path 的輔助函數 (不應用任何 left/top)
+    // 輔助函數：創建 Path 並套用偏移量
     const createPath = (pathString, options) => {
-        return new fabric.Path(pathString, {
+        const path = new fabric.Path(pathString, {
             ...options,
             scaleX: 1, scaleY: 1, 
             originX: 'left',
             originY: 'top',
-            // **重要**：不在此處設置 left/top，讓 Group 處理移動
         });
+        
+        // **關鍵修正**：將每個 Path 的位置移動到正確的畫布座標
+        path.set({
+            left: path.left + FINAL_OFFSET_X, 
+            top: path.top + FINAL_OFFSET_Y
+        });
+
+        return path;
     };
     
-    // 1. 創建所有 Path
+    // 1. 創建所有 Path (已內含偏移量)
     bodyColorPath = createPath(bodyPathString, { fill: colorBody.value, selectable: false, opacity: 0.7 });
     capColorPath = createPath(capPathString, { fill: colorCap.value, selectable: false, opacity: 0.8 });
     handleColorPath = createPath(handlePathString, { fill: colorHandle.value, selectable: false, opacity: 0.9 });
     
-    // 裁剪路徑因為要被設計圖案引用，必須單獨創建，但也要應用偏移
-    designAreaClipPath = createPath(designAreaPathString, { absolutePosition: true, selectable: false, evented: false, fill: 'transparent' });
-    designAreaClipPath.set({
-        left: designAreaClipPath.left + FINAL_OFFSET_X,
-        top: designAreaClipPath.top + FINAL_OFFSET_Y
+    // 裁剪路徑 (已內含偏移量)
+    designAreaClipPath = createPath(designAreaPathString, { 
+        absolutePosition: true, 
+        selectable: false, 
+        evented: false, 
+        fill: 'transparent' 
     });
-
-
-    // 2. 將所有 Path 放入 Group 中
+    
+    // 2. 將所有顏色 Path 放入 Group 中
     pathGroup = new fabric.Group([bodyColorPath, capColorPath, handleColorPath], {
         selectable: false,
-        // **關鍵**：將 Group 的位置設定為計算出的偏移量
-        left: bodyColorPath.left + FINAL_OFFSET_X,
-        top: bodyColorPath.top + FINAL_OFFSET_Y
+        // **修正**：Group 自身的 left/top 設為 0，避免二次偏移
+        left: 0, 
+        top: 0
     });
     
-    // 3. 加入 Group 到 Canvas
+    // 3. 將 Group 和裁剪路徑加入 Canvas
     canvas.add(pathGroup);
     
-    // 排序圖層 (在 Group 內部排序，或 Group 在 Canvas 上的層級)
+    // 重新添加設計圖案和文字 (如果它們存在)
+    if (designImage) {
+        canvas.add(designImage);
+        designImage.setControlsVisibility({
+            mt: false, mb: false, ml: false, mr: false
+        });
+    }
+    if (designText) {
+        canvas.add(designText);
+    }
+
     pathGroup.sendToBack(); 
-    
     canvas.renderAll();
 }
 
 
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換 (現在是對 Group 內的子 Path 進行操作)
+// 4. 事件處理函數
 // --------------------------------------------------------
+
 function updatePathColor() {
     if (capColorPath) capColorPath.set('fill', colorCap.value);
     if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
     if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
     canvas.renderAll();
 }
-// ... (事件監聽保持不變) ...
+
+function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(f) {
+        fabric.Image.fromURL(f.target.result, function(img) {
+            // 移除舊的
+            if (designImage) canvas.remove(designImage);
+
+            designImage = img;
+            
+            // 縮放並設定位置
+            img.scaleToWidth(designAreaClipPath.width / 2); // 初始設定為裁剪區一半寬度
+            img.scaleToHeight(designAreaClipPath.height / 2);
+            
+            img.set({
+                left: designAreaClipPath.left + designAreaClipPath.width / 4,
+                top: designAreaClipPath.top + designAreaClipPath.height / 4,
+                clipPath: designAreaClipPath,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true
+            });
+            
+            canvas.add(designImage);
+            canvas.renderAll();
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleTextInput(e) {
+    const text = e.target.value;
+    if (designText) canvas.remove(designText);
+
+    if (text) {
+        designText = new fabric.Text(text, {
+            left: designAreaClipPath.left + designAreaClipPath.width / 4,
+            top: designAreaClipPath.top + designAreaClipPath.height / 4 + 100, // 初始位置在圖片下方
+            fontSize: 40,
+            fill: '#000000',
+            clipPath: designAreaClipPath,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true
+        });
+        canvas.add(designText);
+    }
+    canvas.renderAll();
+}
+
+function clearDesign() {
+    if (designImage) {
+        canvas.remove(designImage);
+        designImage = null;
+        imgUpload.value = ''; // 清空檔案選擇器
+    }
+    if (designText) {
+        canvas.remove(designText);
+        designText = null;
+        textInput.value = '';
+    }
+    canvas.renderAll();
+}
+
+function saveDesign() {
+    // 暫時隱藏線稿圖層 (如果它在 Canvas 上)
+    // 這裡我們假設線稿是在 CSS/HTML 中作為背景圖片處理的，所以只需要處理 Canvas 內容
+
+    // 創建一個新的 Canvas 來合併所有內容，並輸出 PNG
+    const dataURL = canvas.toDataURL({
+        format: 'png',
+        quality: 1
+    });
+
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = 'custom_bottle_design.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
 
 // --------------------------------------------------------
-// 5, 6, 7, 8, 9 保持不變 (Image Upload, Text Input, Clear, Save, Init)
+// 5. 事件監聽
 // --------------------------------------------------------
-// ... (其餘程式碼請沿用上一個回覆中提供的 draw.js 完整程式碼) ...
+colorCap.addEventListener('input', updatePathColor);
+colorBody.addEventListener('input', updatePathColor);
+colorHandle.addEventListener('input', updatePathColor);
+imgUpload.addEventListener('change', handleImageUpload);
+textInput.addEventListener('input', handleTextInput);
+clearBtn.addEventListener('click', clearDesign);
+saveBtn.addEventListener('click', saveDesign);
+
+
+// --------------------------------------------------------
+// 6. 啟動應用程式
+// --------------------------------------------------------
+resizeAndInitialize();
