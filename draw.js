@@ -1,4 +1,4 @@
-// draw.js (使用 Fabric.js 實現分區著色與圖片裁剪)
+// draw.js (最終版：整合 Fabric.js、分區著色、圖片裁剪和下載功能)
 
 // --------------------------------------------------------
 // 1. 初始化 Fabric.js Canvas 與 DOM 元素
@@ -14,30 +14,13 @@ const colorHandle = document.getElementById("colorHandle");
 const imgUpload = document.getElementById("imgUpload");
 const textInput = document.getElementById("textInput");
 const clearBtn = document.getElementById("clearBtn");
+const saveBtn = document.getElementById("saveBtn"); // 新增的下載按鈕
 
 // --------------------------------------------------------
-// 2. Path 原始定義 (保留，用於座標參考和 Path 字串生成)
-// --------------------------------------------------------
-// 這些函數不再直接繪製，只作為 path 字串生成的參考。
-// 座標基於您提供的原始數據 (寬度約 300px)
-
-// ① 瓶蓋 Path
-function pathCap(ctx) {
-    // M 90 40 Q 150 -10, 210 40 Q 230 90, 210 130 L 90 130 Q 70 90, 90 40 Z
-}
-// ② 瓶身 Path
-function pathBody(ctx) {
-    // M 70 140 Q 55 170, 55 210 L 55 500 Q 55 540, 90 560 L 215 560 Q 245 540, 245 500 L 245 210 Q 245 170, 230 140 Z
-}
-// ③ 提帶 + 圓環 Path
-function pathStrap(ctx) {
-    // M 150 180 L 172 180 L 172 430 L 150 430 Z ... (組合 Path)
-}
-
-// --------------------------------------------------------
-// 3. 根據 Path 類型返回 Fabric.js Path Data 字串
+// 2. 曲線 Path Data (基於您的原生程式碼座標)
 // --------------------------------------------------------
 function getFabricPath(type) {
+    // 座標寬度約 300px
     switch (type) {
         case 'cap':
             return 'M 90 40 Q 150 -10, 210 40 Q 230 90, 210 130 L 90 130 Q 70 90, 90 40 Z';
@@ -54,15 +37,18 @@ function getFabricPath(type) {
 }
 
 // --------------------------------------------------------
-// 4. 初始化 Canvas 尺寸與 Mask 物件
+// 3. 初始化 Canvas 尺寸與 Mask 物件
 // --------------------------------------------------------
 function resizeAndInitialize() {
+    // 1. 取得線稿圖片的實際顯示尺寸
     const rect = bottleImg.getBoundingClientRect();
     canvas.setWidth(rect.width);
     canvas.setHeight(rect.height);
-    canvas.clear(); // 清除所有舊物件
+    
+    // 2. 清除 Canvas 內容，重新繪製
+    canvas.clear(); 
 
-    // 縮放比例 (基於您的 Path 座標寬度 300px)
+    // 3. 計算縮放比例 (您的 Path 座標基於 300px 寬度)
     const scale = rect.width / 300; 
     
     // ======================================
@@ -73,25 +59,23 @@ function resizeAndInitialize() {
     clipPath.set({
         absolutePosition: true, 
         scaleX: scale, scaleY: scale,
-        selectable: false,
-        evented: false, 
-        fill: 'transparent'
+        selectable: false, evented: false, fill: 'transparent'
     });
-    canvas.clipPath = clipPath; // 儲存為 Canvas 屬性，供圖片上傳使用
+    canvas.clipPath = clipPath; 
 
     // ======================================
-    // B. 創建顏色遮罩 (用於分區著色)
+    // B. 創建顏色遮罩
     // ======================================
     
-    // 瓶身顏色遮罩
+    // 瓶身顏色遮罩 (透明度 70%)
     bodyMask = new fabric.Path(getFabricPath('body'));
     bodyMask.set({ fill: colorBody.value, scaleX: scale, scaleY: scale, selectable: false, opacity: 0.7 });
     
-    // 瓶蓋顏色遮罩
+    // 瓶蓋顏色遮罩 (透明度 80%)
     capMask = new fabric.Path(getFabricPath('cap'));
     capMask.set({ fill: colorCap.value, scaleX: scale, scaleY: scale, selectable: false, opacity: 0.8 });
     
-    // 提帶顏色遮罩
+    // 提帶顏色遮罩 (透明度 90%)
     handleMask = new fabric.Path(getFabricPath('strap'));
     handleMask.set({ fill: colorHandle.value, scaleX: scale, scaleY: scale, selectable: false, opacity: 0.9 });
     
@@ -104,25 +88,12 @@ function resizeAndInitialize() {
     bodyMask.sendToBack(); 
     capMask.bringToFront();
     handleMask.bringToFront();
-
-    // 重新應用裁剪路徑和 Z-index 到現有用戶圖案和文字
-    canvas.getObjects().forEach(obj => {
-        if (obj.uploaded) {
-            obj.set({ clipPath: canvas.clipPath });
-            obj.sendToBack();
-            bodyMask.sendToBack();
-        }
-        if (obj.textObject) {
-            obj.sendToBack();
-            bodyMask.sendToBack();
-        }
-    });
-
+    
     canvas.renderAll();
 }
 
 // --------------------------------------------------------
-// 5. 綁定事件：顏色切換
+// 4. 綁定事件：顏色切換
 // --------------------------------------------------------
 function updateMaskColor() {
     if (capMask) capMask.set('fill', colorCap.value);
@@ -135,8 +106,9 @@ colorBody.addEventListener("input", updateMaskColor);
 colorCap.addEventListener("input", updateMaskColor);
 colorHandle.addEventListener("input", updateMaskColor);
 
+
 // --------------------------------------------------------
-// 6. 綁定事件：圖片上傳 (實作圖片裁剪)
+// 5. 綁定事件：圖片上傳 (實作圖片裁剪)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -150,22 +122,22 @@ imgUpload.addEventListener("change", e => {
             // 移除所有舊的圖片物件
             canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
             
-            // 調整圖片的初始大小和位置
+            // 設定圖片的初始大小、位置和控制項
             img.set({
-                uploaded: true, // 標記為上傳的物件
+                uploaded: true, 
                 scaleX: 0.25, scaleY: 0.25,
-                left: canvas.getWidth() * 0.2, // 預設位置在瓶身範圍內
+                left: canvas.getWidth() * 0.2, 
                 top: canvas.getHeight() * 0.35,
                 hasControls: true, 
-                // ★ 應用裁剪模具
+                // 應用裁剪模具
                 clipPath: canvas.clipPath 
             });
 
             canvas.add(img);
             
-            // 確保圖片在瓶身顏色層的下方，這樣顏色會像是半透明的瓶身蓋在圖片上
+            // 圖層排序：確保圖片在線稿和瓶蓋/提帶之下，但在瓶身顏色層之上
             img.sendToBack(); 
-            bodyMask.sendToBack(); // 讓瓶身顏色層在圖片的下面
+            bodyMask.sendToBack(); 
 
             canvas.renderAll();
         });
@@ -174,7 +146,7 @@ imgUpload.addEventListener("change", e => {
 });
 
 // --------------------------------------------------------
-// 7. 綁定事件：文字輸入
+// 6. 綁定事件：文字輸入 (實作文字裁剪)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
     // 移除所有舊的文字物件
@@ -182,13 +154,13 @@ textInput.addEventListener("input", () => {
     
     if (textInput.value) {
         const textObj = new fabric.Text(textInput.value, {
-            textObject: true, // 標記為文字物件
+            textObject: true, 
             fontSize: 40,
             fill: 'black',
             left: canvas.getWidth() * 0.3,
             top: canvas.getHeight() * 0.55,
             hasControls: true,
-            // ★ 文字也應用裁剪模具
+            // 應用裁剪模具
             clipPath: canvas.clipPath 
         });
         canvas.add(textObj);
@@ -196,6 +168,44 @@ textInput.addEventListener("input", () => {
         bodyMask.sendToBack();
     }
     canvas.renderAll();
+});
+
+
+// --------------------------------------------------------
+// 7. 新增：下載設計圖功能
+// --------------------------------------------------------
+saveBtn.addEventListener('click', () => {
+    // 為了下載，我們必須臨時將 HTML 的線稿圖片畫到 Canvas 上
+    
+    // 1. 隱藏所有用戶可編輯的控制項
+    canvas.discardActiveObject();
+    canvas.renderAll();
+    
+    // 2. 將 Canvas 轉為 Data URL (包含所有顏色、圖案、文字)
+    const base64Data = canvas.toDataURL({
+        format: 'png',
+        quality: 1.0 
+    });
+    
+    // 3. 創建一個臨時 Canvas，將 Canvas 內容和線稿圖片合併
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = canvas.width;
+    finalCanvas.height = canvas.height;
+    const finalCtx = finalCanvas.getContext('2d');
+
+    // 繪製 Canvas 內容 (顏色和圖案)
+    finalCtx.drawImage(document.getElementById('designCanvas'), 0, 0);
+    
+    // 繪製最上層的線稿圖片
+    finalCtx.drawImage(bottleImg, 0, 0, finalCanvas.width, finalCanvas.height);
+
+    // 4. 下載圖片
+    const a = document.createElement('a');
+    a.href = finalCanvas.toDataURL('image/png');
+    a.download = 'waterbottle_design.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 });
 
 
@@ -217,10 +227,11 @@ clearBtn.addEventListener("click", () => {
 // 9. 首次初始化
 // --------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    // 確保圖片載入完成後才執行初始化 (用於計算比例)
+    // 確保圖片載入完成後才執行初始化 (用於計算比例和尺寸)
     if (bottleImg.complete) {
         resizeAndInitialize();
     } else {
+        // 如果圖片還沒載入，等待載入完成
         bottleImg.onload = resizeAndInitialize;
     }
     window.addEventListener("resize", resizeAndInitialize);
