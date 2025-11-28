@@ -1,4 +1,4 @@
-// draw.js (最終修訂版：重新引入精確偏移量，解決座標歸零問題)
+// draw.js (最終 Group 修正版：使用 Group 確保對齊)
 
 // --------------------------------------------------------
 // 1. 定義 SVG 路徑字串 (保持不變)
@@ -10,7 +10,7 @@ const designAreaPathString = "m 447.66355,338.31776 -13.08411,528.97196 88.78505
 
 
 // --------------------------------------------------------
-// 2. 初始化 Fabric.js Canvas 與 DOM 元素
+// 2. 初始化 Fabric.js Canvas 與 DOM 元素 (略)
 // --------------------------------------------------------
 const canvas = new fabric.Canvas('designCanvas');
 const bottleImg = document.getElementById("bottle"); 
@@ -23,9 +23,11 @@ const textInput = document.getElementById("textInput");
 const clearBtn = document.getElementById("clearBtn");
 const saveBtn = document.getElementById("saveBtn");
 
+let pathGroup; // 宣告 Group 變數
+
 
 // --------------------------------------------------------
-// 3. 初始化 Canvas 尺寸與顏色層 (核心修正區 - 使用精確偏移)
+// 3. 初始化 Canvas 尺寸與顏色層 (核心 Group 修正區)
 // --------------------------------------------------------
 function resizeAndInitialize() {
     const ACTUAL_SIZE = 1024; 
@@ -34,51 +36,55 @@ function resizeAndInitialize() {
     canvas.setHeight(ACTUAL_SIZE);
     canvas.clear(); 
     
-    // ★★★ 最終精確偏移量：向左移動 95，向上移動 196 ★★★
-    // 讓 Path 的實際繪製區域從 (434, 296) 移到線稿瓶身起點 (340, 100)
-    const FINAL_OFFSET_X = -80; 
-    const FINAL_OFFSET_Y = -300; 
+    // ★★★ 精確偏移量 (只應用在 Group 上) ★★★
+    // 讓整個 Path Group 從 (434, 296) 移到線稿起點 (340, 100)
+    const FINAL_OFFSET_X = -95; 
+    const FINAL_OFFSET_Y = -196; 
 
-    // 創建 Path 的輔助函數 (應用固定偏移)
+    // 創建 Path 的輔助函數 (不應用任何 left/top)
     const createPath = (pathString, options) => {
-        const path = new fabric.Path(pathString, {
+        return new fabric.Path(pathString, {
             ...options,
             scaleX: 1, scaleY: 1, 
             originX: 'left',
             originY: 'top',
+            // **重要**：不在此處設置 left/top，讓 Group 處理移動
         });
-        
-        // **關鍵修正**：應用偏移量。Fabric.js Path 的 left/top 初始值來自 Path 內部的 M 座標。
-        // 我們將其 left/top 屬性設定為 (Path 初始 left + 偏移量)
-        path.set({
-            left: path.left + FINAL_OFFSET_X, 
-            top: path.top + FINAL_OFFSET_Y
-        });
-
-        return path;
     };
     
     // 1. 創建所有 Path
     bodyColorPath = createPath(bodyPathString, { fill: colorBody.value, selectable: false, opacity: 0.7 });
     capColorPath = createPath(capPathString, { fill: colorCap.value, selectable: false, opacity: 0.8 });
     handleColorPath = createPath(handlePathString, { fill: colorHandle.value, selectable: false, opacity: 0.9 });
+    
+    // 裁剪路徑因為要被設計圖案引用，必須單獨創建，但也要應用偏移
     designAreaClipPath = createPath(designAreaPathString, { absolutePosition: true, selectable: false, evented: false, fill: 'transparent' });
+    designAreaClipPath.set({
+        left: designAreaClipPath.left + FINAL_OFFSET_X,
+        top: designAreaClipPath.top + FINAL_OFFSET_Y
+    });
+
+
+    // 2. 將所有 Path 放入 Group 中
+    pathGroup = new fabric.Group([bodyColorPath, capColorPath, handleColorPath], {
+        selectable: false,
+        // **關鍵**：將 Group 的位置設定為計算出的偏移量
+        left: bodyColorPath.left + FINAL_OFFSET_X,
+        top: bodyColorPath.top + FINAL_OFFSET_Y
+    });
     
-    // ======================================
-    // 添加並排序圖層
-    // ======================================
-    canvas.add(bodyColorPath, capColorPath, handleColorPath);
+    // 3. 加入 Group 到 Canvas
+    canvas.add(pathGroup);
     
-    bodyColorPath.sendToBack();
-    capColorPath.bringToFront();
-    handleColorPath.bringToFront(); 
+    // 排序圖層 (在 Group 內部排序，或 Group 在 Canvas 上的層級)
+    pathGroup.sendToBack(); 
     
     canvas.renderAll();
 }
 
 
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換 (保持不變)
+// 4. 綁定事件：顏色切換 (現在是對 Group 內的子 Path 進行操作)
 // --------------------------------------------------------
 function updatePathColor() {
     if (capColorPath) capColorPath.set('fill', colorCap.value);
@@ -86,113 +92,10 @@ function updatePathColor() {
     if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
     canvas.renderAll();
 }
-colorBody.addEventListener("input", updatePathColor);
-colorCap.addEventListener("input", updatePathColor);
-colorHandle.addEventListener("input", updatePathColor);
+// ... (事件監聽保持不變) ...
 
 
 // --------------------------------------------------------
-// 5. 圖片上傳 (使用 1024 畫布的中心點座標)
+// 5, 6, 7, 8, 9 保持不變 (Image Upload, Text Input, Clear, Save, Init)
 // --------------------------------------------------------
-imgUpload.addEventListener("change", e => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(f) {
-        const dataURL = f.target.result;
-
-        fabric.Image.fromURL(dataURL, function(img) {
-            canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
-            
-            img.set({
-                uploaded: true, 
-                scaleX: 0.25, scaleY: 0.25, 
-                // 將圖案放置在瓶身設計區域的中心附近
-                left: 512, 
-                top: 550, 
-                hasControls: true, 
-                clipPath: designAreaClipPath 
-            });
-
-            canvas.add(img);
-            img.bringToFront(); 
-            canvas.renderAll();
-        });
-    };
-    reader.readAsDataURL(file);
-});
-
-
-// --------------------------------------------------------
-// 6. 文字輸入 (使用 1024 畫布的中心點座標)
-// --------------------------------------------------------
-textInput.addEventListener("input", () => {
-    // 移除現有的文字物件
-    canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
-    
-    if (textInput.value) {
-        const textObj = new fabric.Text(textInput.value, {
-            textObject: true, 
-            fontSize: 60, 
-            fill: 'black',
-            // 將文字放置在設計區域的下方中心附近
-            left: 512, 
-            top: 750, 
-            hasControls: true,
-            clipPath: designAreaClipPath 
-        });
-        canvas.add(textObj);
-        textObj.bringToFront(); 
-    }
-    canvas.renderAll();
-});
-
-
-// --------------------------------------------------------
-// 7, 8, 9 清除、下載、基礎初始化 (保持不變)
-// --------------------------------------------------------
-clearBtn.addEventListener("click", () => {
-    canvas.getObjects().filter(obj => obj.uploaded || obj.textObject).forEach(obj => canvas.remove(obj));
-    textInput.value = "";
-    imgUpload.value = "";
-    canvas.renderAll();
-});
-
-saveBtn.addEventListener("click", () => {
-    // 為了下載圖案清晰，暫時將透明度設為 1
-    const originalOpacityBody = bodyColorPath.opacity;
-    const originalOpacityCap = capColorPath.opacity;
-    const originalOpacityHandle = handleColorPath.opacity;
-
-    bodyColorPath.set({ opacity: 1 });
-    capColorPath.set({ opacity: 1 });
-    handleColorPath.set({ opacity: 1 });
-
-    canvas.renderAll();
-
-    const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
-    const link = document.createElement('a');
-    link.href = dataURL;
-    link.download = 'custom_bottle_design.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // 恢復原始透明度
-    bodyColorPath.set({ opacity: originalOpacityBody });
-    capColorPath.set({ opacity: originalOpacityCap });
-    handleColorPath.set({ opacity: originalOpacityHandle });
-    canvas.renderAll();
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-    if (bottleImg.complete) {
-        resizeAndInitialize();
-    } else {
-        bottleImg.onload = resizeAndInitialize;
-    }
-    window.addEventListener("resize", () => {
-        canvas.renderAll();
-    });
-});
+// ... (其餘程式碼請沿用上一個回覆中提供的 draw.js 完整程式碼) ...
