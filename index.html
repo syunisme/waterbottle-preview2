@@ -2,125 +2,176 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>水壺客製化設計</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>客製化水瓶設計</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            gap: 30px; 
-            padding: 30px; 
+        /* 整體佈局 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
             background-color: #f4f4f4;
-        }
-        
-        /* 預覽區容器：定義最終的可視尺寸 */
-        #preview-container { 
-            position: relative; 
-            width: 450px; 
-            height: 600px; 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            background-color: white;
-            border-radius: 8px;
-            
-            /* 讓圖片/Canvas 在容器內居中顯示 */
             display: flex;
             justify-content: center;
-            align-items: center;
-            overflow: hidden; 
         }
-        
-        /* 1. 線稿圖片：必須絕對定位並在容器內保持比例 (關鍵！) */
-        #bottle { 
-            position: absolute; 
-            width: 100%; 
-            height: 100%; 
-            top: 0; left: 0; 
-            z-index: 1; /* 底層 */
-            object-fit: contain; /* 確保圖片保持比例，不會被 CSS 拉伸 */
+
+        #app {
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
         }
-        
-        /* 2. Fabric.js Canvas：必須絕對定位，並在容器內保持比例 (關鍵！) */
-        #designCanvas { 
-            position: absolute; 
-            top: 0; left: 0; 
-            /* 讓 CSS 負責將 Fabric.js 內部 1024x1024 的內容縮小到 100% 容器寬度 */
-            width: 100%; 
-            height: 100%; 
-            z-index: 2; /* 上層 */
-            object-fit: contain; /* 確保 Canvas 內容也保持比例 */
-        }
-        
-        /* 控制面板樣式 (保持不變) */
-        .controls { 
-            width: 300px; 
-            padding: 20px; 
+
+        /* 左側控制面板 */
+        #controls {
+            flex: 1;
+            padding: 20px;
             background-color: white;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-        .controls div { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
-        input[type="color"] { width: 100%; height: 35px; border: none; border-radius: 4px; }
-        input[type="file"], input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { 
-            width: 100%; 
-            padding: 10px; 
-            color: white; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer;
-            margin-top: 10px;
+
+        .control-group {
+            margin-bottom: 20px;
         }
-        #clearBtn { background-color: #007bff; }
-        #clearBtn:hover { background-color: #0056b3; }
-        #saveBtn { background-color: #28a745; }
-        #saveBtn:hover { background-color: #1e7e34; }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        input[type="text"], input[type="file"] {
+            width: calc(100% - 10px);
+            padding: 10px 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* 按鈕樣式 */
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        #clearBtn {
+            background-color: #007bff;
+            color: white;
+        }
+        #clearBtn:hover {
+            background-color: #0056b3;
+        }
+
+        #saveBtn {
+            background-color: #28a745;
+            color: white;
+        }
+        #saveBtn:hover {
+            background-color: #1e7e34;
+        }
+        
+        /* 右側預覽區 (核心修正) */
+        #preview-container { 
+            flex: 2;
+            position: relative; /* 成為絕對定位元素的參考點 */
+            width: 100%;
+            height: 600px; /* 固定高度以顯示整個瓶子 */
+            overflow: hidden; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background-color: white;
+            border-radius: 8px;
+        }
+        
+        /* 1. 線稿圖片 和 2. Fabric.js Canvas：讓它們完全重疊並在容器內居中 */
+        /* Canvas 尺寸在 JS 中設定為 1024x1024，這裡讓 CSS 負責縮放並重疊 */
+        #bottle, #designCanvas { 
+            position: absolute; 
+            top: 50%; /* 垂直置中 */
+            left: 50%; /* 水平置中 */
+            width: 100%; 
+            height: 100%; 
+            /* 使用 transform 讓中心對齊中心 */
+            transform: translate(-50%, -50%); 
+            object-fit: contain; /* 確保內容不會被拉伸，且完整顯示 */
+        }
+
+        #bottle { z-index: 1; } /* 線稿圖片在最底層 */
+        #designCanvas { z-index: 2; } /* Fabric.js 畫布在中間層，繪製顏色和圖案 */
+        
+        /* 標題樣式 */
+        h2 {
+            display: flex;
+            align-items: center;
+            color: #ff6666;
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2::before {
+            content: "💡";
+            margin-right: 10px;
+        }
     </style>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 </head>
 <body>
 
-    <div class="controls">
-        <h2>🎨 客製化選項</h2>
-        
-        <div>
-            <label for="colorCap">瓶蓋顏色:</label>
-            <input type="color" id="colorCap" value="#cccccc">
-        </div>
-        
-        <div>
-            <label for="colorHandle">提帶顏色:</label>
-            <input type="color" id="colorHandle" value="#000000">
-        </div>
-        
-        <div>
-            <label for="colorBody">瓶身顏色:</label>
-            <input type="color" id="colorBody" value="#99ccff">
+    <div id="app">
+        <div id="controls">
+            <h2>客製化選項</h2>
+
+            <div class="control-group">
+                <label for="colorCap">瓶蓋顏色:</label>
+                <input type="color" id="colorCap" value="#ff0000">
+            </div>
+
+            <div class="control-group">
+                <label for="colorHandle">提帶顏色:</label>
+                <input type="color" id="colorHandle" value="#ff0000">
+            </div>
+
+            <div class="control-group">
+                <label for="colorBody">瓶身顏色:</label>
+                <input type="color" id="colorBody" value="#add8e6">
+            </div>
+
+            <div class="control-group">
+                <label for="imgUpload">上傳客製化圖案:</label>
+                <input type="file" id="imgUpload" accept="image/*">
+            </div>
+
+            <div class="control-group">
+                <label for="textInput">輸入文字:</label>
+                <input type="text" id="textInput" placeholder="輸入您的文字">
+            </div>
+
+            <button id="clearBtn">清除圖案/文字</button>
+            <button id="saveBtn">下載設計圖</button>
         </div>
 
-        <div>
-            <label for="imgUpload">上傳客製化圖案:</label>
-            <input type="file" id="imgUpload" accept="image/*">
+        <div id="preview-container">
+            <img id="bottle" src="waterbottle.png" alt="水瓶線稿">
+            <canvas id="designCanvas"></canvas>
         </div>
-
-        <div>
-            <label for="textInput">輸入文字:</label>
-            <input type="text" id="textInput" placeholder="輸入您的文字">
-        </div>
-
-        <button id="clearBtn">清除圖案/文字</button>
-        <button id="saveBtn">下載設計圖</button>
     </div>
 
-    <div id="preview-container">
-        <img id="bottle" src="waterbottle.png" alt="Water Bottle Wireframe">
-        
-        <canvas id="designCanvas"></canvas>
-    </div>
-    
-    <script src="draw.js"></script> 
+    <script src="draw.js"></script>
 
 </body>
 </html>
