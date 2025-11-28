@@ -135,7 +135,7 @@ imgUpload.addEventListener("change", e => {
 
             canvas.add(img);
             
-            // 圖層排序：確保圖片在線稿和瓶蓋/提帶之下，但在瓶身顏色層之上
+            // 圖層排序：確保圖片在顏色遮罩下方
             img.sendToBack(); 
             bodyMask.sendToBack(); 
 
@@ -172,40 +172,46 @@ textInput.addEventListener("input", () => {
 
 
 // --------------------------------------------------------
-// 7. 新增：下載設計圖功能
+// 7. 修正：下載設計圖功能 (配合 Z-Index 對調)
 // --------------------------------------------------------
 saveBtn.addEventListener('click', () => {
-    // 為了下載，我們必須臨時將 HTML 的線稿圖片畫到 Canvas 上
+    // 1. 為了下載，我們必須臨時將 HTML 的線稿圖片作為 Fabric Canvas 的背景
     
-    // 1. 隱藏所有用戶可編輯的控制項
+    // 臨時將 HTML 圖片設為 Canvas 背景 (使用 bottleImg.src)
+    canvas.setBackgroundImage(bottleImg.src, canvas.renderAll.bind(canvas), {
+        // 使用圖片的自然寬高來計算比例，確保不失真
+        scaleX: canvas.getWidth() / bottleImg.naturalWidth,
+        scaleY: canvas.getHeight() / bottleImg.naturalHeight,
+        // 確保背景圖片在下載時能完全覆蓋 Canvas 區域
+        top: 0,
+        left: 0
+    });
+    
+    // 隱藏所有用戶可編輯的控制項
     canvas.discardActiveObject();
     canvas.renderAll();
     
-    // 2. 將 Canvas 轉為 Data URL (包含所有顏色、圖案、文字)
-    const base64Data = canvas.toDataURL({
-        format: 'png',
-        quality: 1.0 
-    });
-    
-    // 3. 創建一個臨時 Canvas，將 Canvas 內容和線稿圖片合併
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = canvas.width;
-    finalCanvas.height = canvas.height;
-    const finalCtx = finalCanvas.getContext('2d');
-
-    // 繪製 Canvas 內容 (顏色和圖案)
-    finalCtx.drawImage(document.getElementById('designCanvas'), 0, 0);
-    
-    // 繪製最上層的線稿圖片
-    finalCtx.drawImage(bottleImg, 0, 0, finalCanvas.width, finalCanvas.height);
-
-    // 4. 下載圖片
-    const a = document.createElement('a');
-    a.href = finalCanvas.toDataURL('image/png');
-    a.download = 'waterbottle_design.png';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // 等待背景圖片被繪製完成 (重要！因為 setBackgroundImage 是異步的)
+    setTimeout(() => {
+        
+        // 2. 將 Canvas 轉為 Data URL (現在包含線稿背景、顏色、圖案、文字)
+        const dataURL = canvas.toDataURL({
+            format: 'png',
+            quality: 1.0 
+        });
+        
+        // 3. 執行下載
+        const a = document.createElement('a');
+        a.href = dataURL;
+        a.download = 'waterbottle_design.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // 4. 下載完成後，移除臨時設定的背景圖 (恢復 Canvas 原始狀態)
+        canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+        
+    }, 100); // 給予短暫的時間讓 Fabric.js 處理背景圖片
 });
 
 
