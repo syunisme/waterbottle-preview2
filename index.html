@@ -14,35 +14,44 @@
             background-color: #f4f4f4;
         }
         
-        /* 預覽區容器：設定相對定位，作為 Canvas 和圖片的基準 */
+        /* 預覽區容器：定義最終的可視尺寸 */
         #preview-container { 
             position: relative; 
-            /* 讓預覽區有一個固定且足夠大的尺寸 */
             width: 450px; 
-            height: 650px; 
+            height: 600px; 
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             background-color: white;
             border-radius: 8px;
+            
+            /* 讓圖片/Canvas 在容器內居中顯示 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; 
         }
         
-        /* 1. 線稿圖片：必須絕對定位並佔滿容器 */
+        /* 1. 線稿圖片：必須絕對定位並在容器內保持比例 (關鍵！) */
         #bottle { 
             position: absolute; 
+            width: 100%; 
+            height: 100%; 
             top: 0; left: 0; 
-            width: 100%; height: 100%; 
             z-index: 1; /* 底層 */
+            object-fit: contain; /* 確保圖片保持比例，不會被 CSS 拉伸 */
         }
         
-        /* 2. Fabric.js Canvas：必須絕對定位、佔滿容器，且在圖片上層 */
+        /* 2. Fabric.js Canvas：必須絕對定位，並在容器內保持比例 (關鍵！) */
         #designCanvas { 
             position: absolute; 
             top: 0; left: 0; 
+            /* 讓 CSS 負責將 Fabric.js 內部 1024x1024 的內容縮小到 100% 容器寬度 */
             width: 100%; 
             height: 100%; 
             z-index: 2; /* 上層 */
+            object-fit: contain; /* 確保 Canvas 內容也保持比例 */
         }
         
-        /* 控制面板樣式 (保持美觀) */
+        /* 控制面板樣式 (保持不變) */
         .controls { 
             width: 300px; 
             padding: 20px; 
