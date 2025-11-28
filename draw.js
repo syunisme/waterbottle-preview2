@@ -1,7 +1,7 @@
-// draw.js (最終完整版：所有 Path 均已更新)
+// draw.js (最終修正版：應用 X, Y 軸不同縮放，解決對齊問題)
 
 // --------------------------------------------------------
-// 1. 定義 SVG 路徑字串 (★★ 所有 Path 均已更新為 Inkscape 提取字串 ★★)
+// 1. 定義 SVG 路徑字串 (保持不變)
 // --------------------------------------------------------
 
 // 您的精確瓶蓋路徑 (Cap Path)
@@ -25,7 +25,7 @@ const bottleImg = document.getElementById("bottle");
 let bodyColorPath, capColorPath, handleColorPath; 
 let designAreaClipPath; 
 
-// DOM 元素
+// DOM 元素 (略)
 const colorBody = document.getElementById("colorBody");
 const colorCap = document.getElementById("colorCap");
 const colorHandle = document.getElementById("colorHandle");
@@ -47,7 +47,11 @@ function resizeAndInitialize() {
     
     // 圖片原始尺寸 (Inkscape 畫布尺寸)
     const ACTUAL_IMAGE_WIDTH = 1024; 
-    const scaleFactor = rect.width / ACTUAL_IMAGE_WIDTH; // 計算 CSS 縮放比例
+    const ACTUAL_IMAGE_HEIGHT = 1024; 
+
+    // ★★★ 關鍵修正：分別計算 X 軸和 Y 軸的縮放比例 ★★★
+    const scaleFactorX = rect.width / ACTUAL_IMAGE_WIDTH; // X 軸縮放比例
+    const scaleFactorY = rect.height / ACTUAL_IMAGE_HEIGHT; // Y 軸縮放比例
     
     // 創建 Path 的輔助函數
     const createPath = (pathString, options) => {
@@ -59,8 +63,8 @@ function resizeAndInitialize() {
         
         // 應用 CSS 縮放校正
         path.set({
-            scaleX: scaleFactor,
-            scaleY: scaleFactor
+            scaleX: scaleFactorX,
+            scaleY: scaleFactorY
         });
         
         return path;
@@ -110,7 +114,7 @@ function resizeAndInitialize() {
 
 
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換 (更新 Path 顏色)
+// 4. 綁定事件：顏色切換 (更新 Path 顏色) (保持不變)
 // --------------------------------------------------------
 function updatePathColor() {
     if (capColorPath) capColorPath.set('fill', colorCap.value);
@@ -125,7 +129,7 @@ colorHandle.addEventListener("input", updatePathColor);
 
 
 // --------------------------------------------------------
-// 5. 圖片上傳 (應用 Path 裁剪)
+// 5. 圖片上傳 (應用 Path 裁剪) (略)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -136,16 +140,15 @@ imgUpload.addEventListener("change", e => {
         const dataURL = f.target.result;
 
         fabric.Image.fromURL(dataURL, function(img) {
-            // 清除舊的圖案
             canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
             
             img.set({
                 uploaded: true, 
-                scaleX: 0.25, scaleY: 0.25, // 初始縮放
-                left: canvas.getWidth() * 0.35, // 初始位置微調
+                scaleX: 0.25, scaleY: 0.25, 
+                left: canvas.getWidth() * 0.35, 
                 top: canvas.getHeight() * 0.45,
                 hasControls: true, 
-                clipPath: designAreaClipPath // 應用精確 Path 裁剪
+                clipPath: designAreaClipPath 
             });
 
             canvas.add(img);
@@ -158,10 +161,9 @@ imgUpload.addEventListener("change", e => {
 
 
 // --------------------------------------------------------
-// 6. 文字輸入 (應用 Path 裁剪)
+// 6. 文字輸入 (應用 Path 裁剪) (略)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
-    // 清除舊的文字
     canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
     
     if (textInput.value) {
@@ -172,7 +174,7 @@ textInput.addEventListener("input", () => {
             left: canvas.getWidth() * 0.35,
             top: canvas.getHeight() * 0.6,
             hasControls: true,
-            clipPath: designAreaClipPath // 應用精確 Path 裁剪
+            clipPath: designAreaClipPath 
         });
         canvas.add(textObj);
         textObj.bringToFront(); 
@@ -182,7 +184,7 @@ textInput.addEventListener("input", () => {
 
 
 // --------------------------------------------------------
-// 7. 清除圖案/文字
+// 7. 清除圖案/文字 (略)
 // --------------------------------------------------------
 clearBtn.addEventListener("click", () => {
     canvas.getObjects().filter(obj => obj.uploaded || obj.textObject).forEach(obj => canvas.remove(obj));
@@ -193,7 +195,7 @@ clearBtn.addEventListener("click", () => {
 
 
 // --------------------------------------------------------
-// 8. 下載設計圖 (可選)
+// 8. 下載設計圖 (略)
 // --------------------------------------------------------
 saveBtn.addEventListener("click", () => {
     // 暫時移除顏色層的不透明度，以便輸出清晰的設計圖
@@ -207,7 +209,6 @@ saveBtn.addEventListener("click", () => {
 
     canvas.renderAll();
 
-    // 輸出為 PNG 檔案
     const dataURL = canvas.toDataURL({
         format: 'png',
         quality: 1
@@ -232,12 +233,10 @@ saveBtn.addEventListener("click", () => {
 // 9. 基礎初始化
 // --------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    // 確保圖片載入完成才初始化 Canvas
     if (bottleImg.complete) {
         resizeAndInitialize();
     } else {
         bottleImg.onload = resizeAndInitialize;
     }
-    // 響應式：視窗大小改變時重新初始化，確保對齊
     window.addEventListener("resize", resizeAndInitialize);
 });
