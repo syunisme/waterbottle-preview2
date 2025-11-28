@@ -1,23 +1,32 @@
-// draw.js (最終版：多重 PNG 圖片遮罩 - 專為精確 3D 線稿設計)
+// draw.js (最終模擬版：使用模擬的 SVG Path 字串)
 
 // --------------------------------------------------------
-// 1. 初始化 Fabric.js Canvas 與 DOM 元素
+// 1. 定義 SVG 路徑字串 (★★ 這是基於您水壺線稿圖的模擬字串 ★★)
+// --------------------------------------------------------
+// 注意：以下座標假設 Canvas 大小約為 400x800 像素
+// M = Move to (移動到), L = Line to (畫線到), Q = Quadratic Bezier (二次貝塞爾曲線)
+
+// 瓶蓋路徑 (模擬頂部的弧度)
+const capPathString = "M 120 100 L 280 100 Q 300 120, 300 150 L 300 180 L 100 180 L 100 150 Q 100 120, 120 100 Z";
+
+// 瓶身路徑 (模擬兩側的弧度，底部略圓)
+const bodyPathString = "M 100 180 L 100 680 Q 100 700, 120 710 L 280 710 Q 300 700, 300 680 L 300 180 Z";
+
+// 提帶路徑 (模擬細長條，底部圓形)
+const handlePathString = "M 200 190 L 220 190 L 220 580 C 220 620, 200 620, 200 580 L 200 190 Z M 190 600 A 30 30 0 1 0 230 600 A 30 30 0 1 0 190 600 Z";
+
+// 設計區域路徑 (瓶身中央，用於裁剪圖案和文字)
+const designAreaPathString = "M 110 250 L 110 650 L 290 650 L 290 250 Z"; 
+
+
+// --------------------------------------------------------
+// 2. 初始化 Fabric.js Canvas 與 DOM 元素
 // --------------------------------------------------------
 const canvas = new fabric.Canvas('designCanvas');
 const bottleImg = document.getElementById("bottle"); 
-let bodyColorRect, capColorRect, handleColorRect; 
+let bodyColorPath, capColorPath, handleColorPath; 
+let designAreaClipPath; 
 
-// 儲存載入的遮罩圖片物件
-let maskCapImage = { image: null };
-let maskBodyImage = { image: null };
-let maskHandleImage = { image: null };
-let maskDesignAreaImage = { image: null };
-
-// 載入計數器，確保所有遮罩載入後才初始化
-let masksLoadedCount = 0;
-const totalMasksToLoad = 4; // cap, body, handle, design_area
-
-// 取得控制項 (保持不變)
 const colorBody = document.getElementById("colorBody");
 const colorCap = document.getElementById("colorCap");
 const colorHandle = document.getElementById("colorHandle");
@@ -27,116 +36,74 @@ const clearBtn = document.getElementById("clearBtn");
 const saveBtn = document.getElementById("saveBtn"); 
 
 // --------------------------------------------------------
-// 2. 載入所有圖片遮罩 (核心：移除 crossOrigin 確保本地和 GitHub 載入)
-// --------------------------------------------------------
-function loadMask(url, targetVar) {
-    fabric.Image.fromURL(url, function(img) {
-        // 將圖片作為裁剪路徑時，它只需要內部屬性
-        img.set({ selectable: false, evented: false, absolutePosition: true });
-        
-        // 確保遮罩圖片的尺寸與 Canvas 一致 (在初始化時會重新計算)
-        img.scaleToWidth(canvas.getWidth());
-        img.scaleToHeight(canvas.getHeight());
-
-        targetVar.image = img; // 儲存載入的圖片物件
-        masksLoadedCount++;
-        console.log(`Mask Loaded: ${url}, Count: ${masksLoadedCount}`); // 偵錯用
-        
-        if (masksLoadedCount === totalMasksToLoad) {
-            console.log("All masks loaded, running initialization.");
-            resizeAndInitialize(); 
-        }
-    }); // ★ 注意：這裡已經移除 { crossOrigin: 'anonymous' }
-}
-
-// 開始載入遮罩 (假設檔案名稱是 PNG 格式)
-loadMask('mask_cap.png', maskCapImage);
-loadMask('mask_body.png', maskBodyImage);
-loadMask('mask_handle.png', maskHandleImage);
-loadMask('mask_design_area.png', maskDesignAreaImage);
-
-// --------------------------------------------------------
-// 3. 初始化 Canvas 尺寸與顏色層 (應用圖片遮罩)
+// 3. 初始化 Canvas 尺寸與顏色層 (核心：使用 fabric.Path)
 // --------------------------------------------------------
 function resizeAndInitialize() {
-    // 1. 取得線稿圖片的實際顯示尺寸
     const rect = bottleImg.getBoundingClientRect();
     canvas.setWidth(rect.width);
     canvas.setHeight(rect.height);
     canvas.clear(); 
     
-    const fullWidth = canvas.getWidth();
-    const fullHeight = canvas.getHeight();
+    // 創建顏色層 - 使用 fabric.Path (Path 物件本身就是形狀)
     
-    // 2. 確保所有載入的遮罩尺寸與 Canvas 同步
-    const masks = [maskCapImage.image, maskBodyImage.image, maskHandleImage.image, maskDesignAreaImage.image];
-    masks.forEach(mask => {
-        if (mask) {
-            mask.scaleToWidth(fullWidth);
-            mask.scaleToHeight(fullHeight);
-        }
+    // 1. 瓶身顏色層
+    bodyColorPath = new fabric.Path(bodyPathString, { 
+        fill: colorBody.value, 
+        selectable: false, 
+        opacity: 0.7 
+    });
+    
+    // 2. 瓶蓋顏色層
+    capColorPath = new fabric.Path(capPathString, { 
+        fill: colorCap.value, 
+        selectable: false, 
+        opacity: 0.8
     });
 
-    // --- 創建顏色層，並應用對應的圖片遮罩 ---
-    
-    // 顏色層都設定為全畫布大小 (0, 0)，然後由 clipPath 裁剪
-    
-    // 1. 瓶身顏色層 (由 mask_body.png 裁剪)
-    bodyColorRect = new fabric.Rect({ 
-        left: 0, top: 0, width: fullWidth, height: fullHeight, 
-        fill: colorBody.value, selectable: false, opacity: 0.7,
-        clipPath: maskBodyImage.image // 應用瓶身遮罩
+    // 3. 提帶顏色層
+    handleColorPath = new fabric.Path(handlePathString, { 
+        fill: colorHandle.value, 
+        selectable: false, 
+        opacity: 0.9
     });
     
-    // 2. 瓶蓋顏色層 (由 mask_cap.png 裁剪)
-    capColorRect = new fabric.Rect({ 
-        left: 0, top: 0, width: fullWidth, height: fullHeight, 
-        fill: colorCap.value, selectable: false, opacity: 0.8,
-        clipPath: maskCapImage.image // 應用瓶蓋遮罩
-    });
-
-    // 3. 提帶顏色層 (由 mask_handle.png 裁剪)
-    handleColorRect = new fabric.Rect({ 
-        left: 0, top: 0, width: fullWidth, height: fullHeight, 
-        fill: colorHandle.value, selectable: false, opacity: 0.9,
-        clipPath: maskHandleImage.image // 應用提帶遮罩
+    // 4. 裁剪路徑 (用於用戶圖案/文字)
+    designAreaClipPath = new fabric.Path(designAreaPathString, {
+        absolutePosition: true,
+        selectable: false,
+        evented: false
     });
     
     // ======================================
     // 添加並排序圖層
     // ======================================
-    canvas.add(bodyColorRect, capColorRect, handleColorRect);
+    canvas.add(bodyColorPath, capColorPath, handleColorPath);
     
-    // 確保顏色層相互排序
-    bodyColorRect.sendToBack();
-    capColorRect.bringToFront();
-    handleColorRect.bringToFront(); 
-    
-    // 重新載入所有圖案和文字 (防止它們在遮罩載入前被清除)
-    // 這裡需要手動把用戶圖案和文字添加到 canvas.getObjects() 中。
-    // 由於我們清除了 canvas，用戶圖案和文字需要重新添加，但這是複雜的狀態管理問題。
-    // 在簡單版本中，用戶在顏色載入後再上傳圖案。
+    bodyColorPath.sendToBack();
+    capColorPath.bringToFront();
+    handleColorPath.bringToFront(); 
     
     canvas.renderAll();
 }
 
+
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換 (保持不變)
+// 4. 綁定事件：顏色切換 (更新 Path 顏色)
 // --------------------------------------------------------
-function updateMaskColor() {
-    if (capColorRect) capColorRect.set('fill', colorCap.value);
-    if (bodyColorRect) bodyColorRect.set('fill', colorBody.value);
-    if (handleColorRect) handleColorRect.set('fill', colorHandle.value);
+function updatePathColor() {
+    if (capColorPath) capColorPath.set('fill', colorCap.value);
+    if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
+    if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
     canvas.renderAll();
 }
 
-colorBody.addEventListener("input", updateMaskColor);
-colorCap.addEventListener("input", updateMaskColor);
-colorHandle.addEventListener("input", updateMaskColor);
+colorBody.addEventListener("input", updatePathColor);
+colorCap.addEventListener("input", updatePathColor);
+colorHandle.addEventListener("input", updatePathColor);
 
 
 // --------------------------------------------------------
-// 5. 圖片上傳 (應用瓶身裁剪)
+// 5. 圖片上傳 (應用 Path 裁剪)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -147,22 +114,19 @@ imgUpload.addEventListener("change", e => {
         const dataURL = f.target.result;
 
         fabric.Image.fromURL(dataURL, function(img) {
-            // 移除舊的圖案
             canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
             
-            // 讓圖片顯示在瓶身中間
             img.set({
                 uploaded: true, 
                 scaleX: 0.25, scaleY: 0.25,
                 left: canvas.getWidth() * 0.35, 
                 top: canvas.getHeight() * 0.45,
                 hasControls: true, 
-                // 應用圖案裁剪遮罩
-                clipPath: maskDesignAreaImage.image 
+                clipPath: designAreaClipPath // 應用 Path 裁剪
             });
 
             canvas.add(img);
-            img.bringToFront(); // 確保圖案在所有顏色層之上
+            img.bringToFront(); 
             canvas.renderAll();
         });
     };
@@ -170,10 +134,9 @@ imgUpload.addEventListener("change", e => {
 });
 
 // --------------------------------------------------------
-// 6. 文字輸入 (應用瓶身裁剪)
+// 6. 文字輸入 (應用 Path 裁剪)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
-    // 移除舊的文字
     canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
     
     if (textInput.value) {
@@ -184,68 +147,25 @@ textInput.addEventListener("input", () => {
             left: canvas.getWidth() * 0.35,
             top: canvas.getHeight() * 0.6,
             hasControls: true,
-            clipPath: maskDesignAreaImage.image // 應用文字裁剪遮罩
+            clipPath: designAreaClipPath // 應用 Path 裁剪
         });
         canvas.add(textObj);
-        textObj.bringToFront(); // 確保文字在所有顏色層之上
+        textObj.bringToFront(); 
     }
     canvas.renderAll();
 });
 
 
 // --------------------------------------------------------
-// 7. 下載設計圖功能 (保持正確的圖層順序)
+// 7. 8. 9. 基礎初始化 (保持不變)
 // --------------------------------------------------------
-saveBtn.addEventListener('click', () => {
-    // 1. 臨時將透明線稿圖設為 Canvas 背景 (位於最底層)
-    canvas.setBackgroundImage(bottleImg.src, canvas.renderAll.bind(canvas), {
-        scaleX: canvas.getWidth() / bottleImg.naturalWidth,
-        scaleY: canvas.getHeight() / bottleImg.naturalHeight,
-        top: 0, left: 0
-    });
-    
-    canvas.discardActiveObject();
-    canvas.renderAll();
-    
-    // 2. 異步等待背景圖繪製並下載
-    setTimeout(() => {
-        const dataURL = canvas.toDataURL({ format: 'png', quality: 1.0 });
-        const a = document.createElement('a');
-        a.href = dataURL;
-        a.download = 'waterbottle_design.png';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        // 3. 恢復 Canvas 狀態，移除臨時背景圖
-        canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
-    }, 100); 
-});
 
-
-// --------------------------------------------------------
-// 8. 清除按鈕
-// --------------------------------------------------------
-clearBtn.addEventListener("click", () => {
-    canvas.getObjects().forEach(obj => {
-        if (obj.uploaded || obj.textObject) {
-            canvas.remove(obj);
-        }
-    });
-    textInput.value = "";
-    canvas.renderAll();
-});
-
-// --------------------------------------------------------
-// 9. 首次初始化
-// --------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    // 這裡的邏輯是等待所有遮罩載入完成後，由 Section 2 的計數器觸發 resizeAndInitialize
+    // 由於沒有異步載入，直接在 DOM 載入後初始化
     if (bottleImg.complete) {
-        // 如果線稿圖已載入，等待 mask 載入計數器
+        resizeAndInitialize();
     } else {
-        bottleImg.onload = function() {
-            // 如果線稿圖還沒載入，等待載入完成
-        };
+        bottleImg.onload = resizeAndInitialize;
     }
     window.addEventListener("resize", resizeAndInitialize);
 });
