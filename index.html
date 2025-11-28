@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>水壺客製化設計</title>
+    
     <style>
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -13,29 +14,32 @@
             background-color: #f4f4f4;
         }
         
-        /* 預覽區容器：設定相對定位，讓子元素能絕對定位 */
+        /* 預覽區容器：設定相對定位，作為 Canvas 和圖片的基準 */
         #preview-container { 
             position: relative; 
-            width: 400px; /* 預覽區寬度 */
-            height: 600px; /* 預覽區高度 */
+            /* 讓預覽區有一個固定且足夠大的尺寸 */
+            width: 450px; 
+            height: 650px; 
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             background-color: white;
             border-radius: 8px;
         }
         
-        /* 1. 線稿圖片：現在放在 Canvas 下層 (Z-INDEX: 1) */
+        /* 1. 線稿圖片：必須絕對定位並佔滿容器 */
         #bottle { 
             position: absolute; 
             top: 0; left: 0; 
             width: 100%; height: 100%; 
-            z-index: 1; /* ★ 數值改為 1 (最底層) */
+            z-index: 1; /* 底層 */
         }
         
-        /* 2. Fabric.js Canvas：現在放在線稿圖上層 (Z-INDEX: 2) */
+        /* 2. Fabric.js Canvas：必須絕對定位、佔滿容器，且在圖片上層 */
         #designCanvas { 
             position: absolute; 
             top: 0; left: 0; 
-            z-index: 2; /* ★ 數值改為 2 (最上層) */
+            width: 100%; 
+            height: 100%; 
+            z-index: 2; /* 上層 */
         }
         
         /* 控制面板樣式 (保持美觀) */
@@ -53,14 +57,16 @@
         button { 
             width: 100%; 
             padding: 10px; 
-            background-color: #007bff; 
             color: white; 
             border: none; 
             border-radius: 4px; 
             cursor: pointer;
             margin-top: 10px;
         }
-        button:hover { background-color: #0056b3; }
+        #clearBtn { background-color: #007bff; }
+        #clearBtn:hover { background-color: #0056b3; }
+        #saveBtn { background-color: #28a745; }
+        #saveBtn:hover { background-color: #1e7e34; }
     </style>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -96,13 +102,13 @@
         </div>
 
         <button id="clearBtn">清除圖案/文字</button>
-        <button id="saveBtn" style="background-color: #28a745;">下載設計圖</button>
+        <button id="saveBtn">下載設計圖</button>
     </div>
 
     <div id="preview-container">
         <img id="bottle" src="waterbottle.png" alt="Water Bottle Wireframe">
         
-        <canvas id="designCanvas" width="400" height="600"></canvas>
+        <canvas id="designCanvas"></canvas>
     </div>
     
     <script src="draw.js"></script> 
