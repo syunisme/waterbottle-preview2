@@ -23,19 +23,19 @@
             border-radius: 8px;
         }
         
-        /* 線稿圖片：Z-INDEX: 2 (最上層) */
+        /* 1. 線稿圖片：現在放在 Canvas 下層 (Z-INDEX: 1) */
         #bottle { 
             position: absolute; 
             top: 0; left: 0; 
             width: 100%; height: 100%; 
-            z-index: 2; /* 確保它在 Canvas 上方 */
+            z-index: 1; /* ★ 數值改為 1 (最底層) */
         }
         
-        /* Fabric.js Canvas：Z-INDEX: 1 (中層) */
+        /* 2. Fabric.js Canvas：現在放在線稿圖上層 (Z-INDEX: 2) */
         #designCanvas { 
             position: absolute; 
             top: 0; left: 0; 
-            z-index: 1; /* 位於線稿圖片下方 */
+            z-index: 2; /* ★ 數值改為 2 (最上層) */
         }
         
         /* 控制面板樣式 (保持美觀) */
