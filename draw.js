@@ -36,7 +36,7 @@ function resizeAndInitialize() {
     
     // ★★★ 最終精確偏移量：向左移動 95，向上移動 196 ★★★
     // 讓 Path 的實際繪製區域從 (434, 296) 移到線稿瓶身起點 (340, 100)
-    const FINAL_OFFSET_X = -40; 
+    const FINAL_OFFSET_X = -60; 
     const FINAL_OFFSET_Y = -196; 
 
     // 創建 Path 的輔助函數 (應用固定偏移)
