@@ -1,4 +1,4 @@
-// draw.js (最終精準版：使用統一邊界校準對齊)
+// draw.js (最終修正版：使用精確計算的固定偏移量)
 
 // --------------------------------------------------------
 // 1. 定義 SVG 路徑字串 (保持不變)
@@ -24,19 +24,35 @@ let bodyColorPath, capColorPath, handleColorPath, designAreaClipPath;
 function resizeAndInitialize() {
     const ACTUAL_SIZE = 1024; 
     
-    // 將 Fabric.js 內部畫布尺寸固定為 1024x1024
     canvas.setWidth(ACTUAL_SIZE);
     canvas.setHeight(ACTUAL_SIZE);
     canvas.clear(); 
     
-    // 創建 Path 的輔助函數 (不包含 left/top 偏移)
+    // ★★★ 最終精確偏移量：向左移動 94.6，向上移動 196.2 ★★★
+    const FINAL_OFFSET_X = -94.6; 
+    const FINAL_OFFSET_Y = -196.2; 
+
+    // 創建 Path 的輔助函數 (應用固定偏移)
     const createPath = (pathString, options) => {
-        return new fabric.Path(pathString, {
+        // 使用 fromSVGPath 而不是 new fabric.Path 以確保 left/top 屬性從 (0,0) 開始
+        const path = new fabric.Path(pathString, {
             ...options,
-            scaleX: 1, scaleY: 1, // 尺寸固定，無需縮放
+            scaleX: 1, scaleY: 1, 
             originX: 'left',
             originY: 'top',
+            // Path 本身可能會帶有初始的 left/top 座標，但我們以 Path 內的 M 座標為準，
+            // 這裡直接將計算出的偏移量應用於 Path 物件的 left/top 屬性。
+            left: options.left || 0 + FINAL_OFFSET_X, 
+            top: options.top || 0 + FINAL_OFFSET_Y
         });
+
+        // 由於 Path 預設是根據其 M 座標定位的，我們必須在創建後應用偏移
+        path.set({
+            left: path.left + FINAL_OFFSET_X,
+            top: path.top + FINAL_OFFSET_Y
+        });
+
+        return path;
     };
     
     // 1. 創建所有 Path
@@ -46,46 +62,7 @@ function resizeAndInitialize() {
     designAreaClipPath = createPath(designAreaPathString, { absolutePosition: true, selectable: false, evented: false, fill: 'transparent' });
     
     // ======================================
-    // ★★★ 核心修正：計算並應用統一偏移量 ★★★
-    // ======================================
-    
-    // 1. 找出所有 Path 的最小 X/Y 座標 (Path 的實際繪製起始點)
-    const allPaths = [bodyColorPath, capColorPath, handleColorPath];
-    let minX = Infinity;
-    let minY = Infinity;
-
-    allPaths.forEach(path => {
-        // getBoundingRect(false) 取得 Path 在畫布上的實際座標
-        const rect = path.getBoundingRect(false); 
-        if (rect.left < minX) minX = rect.left;
-        if (rect.top < minY) minY = rect.top;
-    });
-
-    // 2. 決定線稿的目標位置 (根據 Inkscape 圖，瓶子線稿從 Y=100 左右開始)
-    // 瓶子的理想 X 起始位置 (根據線稿圖目測，瓶子整體寬度約 350，中心約 512，左側約 340)
-    const TARGET_X_START = 340; 
-    // 瓶子的理想 Y 起始位置 (瓶蓋頂部)
-    const TARGET_Y_START = 100; 
-
-    // 3. 計算所需的整體移動量
-    const FINAL_OFFSET_X = TARGET_X_START - minX;
-    const FINAL_OFFSET_Y = TARGET_Y_START - minY; 
-    
-    console.log(`Path minX: ${minX}, Path minY: ${minY}`);
-    console.log(`FINAL_OFFSET_X: ${FINAL_OFFSET_X}, FINAL_OFFSET_Y: ${FINAL_OFFSET_Y}`);
-
-
-    // 4. 應用最終偏移量到所有 Path (包括裁剪路徑)
-    [bodyColorPath, capColorPath, handleColorPath, designAreaClipPath].forEach(path => {
-        path.set({
-            left: path.left + FINAL_OFFSET_X,
-            top: path.top + FINAL_OFFSET_Y
-        });
-    });
-
-
-    // ======================================
-    // 添加並排序圖層 (保持不變)
+    // 添加並排序圖層
     // ======================================
     canvas.add(bodyColorPath, capColorPath, handleColorPath);
     
@@ -98,35 +75,19 @@ function resizeAndInitialize() {
 
 
 // --------------------------------------------------------
-// 4. 綁定事件：顏色切換 (保持不變)
-// --------------------------------------------------------
-function updatePathColor() {
-    if (capColorPath) capColorPath.set('fill', colorCap.value);
-    if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
-    if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
-    canvas.renderAll();
-}
-
-colorBody.addEventListener("input", updatePathColor);
-colorCap.addEventListener("input", updatePathColor);
-colorHandle.addEventListener("input", updateHandleColor);
-
-
-// --------------------------------------------------------
 // 5. 圖片上傳 (使用線稿的中心點座標)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     // ... (FileReader 程式碼省略) ...
-
     fabric.Image.fromURL(dataURL, function(img) {
         canvas.getObjects().filter(obj => obj.uploaded).forEach(obj => canvas.remove(obj));
         
-        // 使用線稿的視覺中心點作為圖案的初始位置 (與Path無關)
         img.set({
             uploaded: true, 
             scaleX: 0.25, scaleY: 0.25, 
-            left: 512, // 1024/2
-            top: 550, // 設計區中心附近
+            // 保持設計圖案在瓶身設計區域 (約 450-800) 的中心
+            left: 512, 
+            top: 550, 
             hasControls: true, 
             clipPath: designAreaClipPath 
         });
@@ -151,7 +112,7 @@ textInput.addEventListener("input", () => {
             fontSize: 60, 
             fill: 'black',
             left: 512, 
-            top: 750, // 設計區下方位置
+            top: 750, 
             hasControls: true,
             clipPath: designAreaClipPath 
         });
@@ -163,6 +124,26 @@ textInput.addEventListener("input", () => {
 
 
 // --------------------------------------------------------
-// 7, 8, 9 保持不變
+// 4, 7, 8, 9 保持不變 (顏色切換、清除、下載、初始化)
 // --------------------------------------------------------
-// ... (清除圖案、下載設計圖、基礎初始化 程式碼保持不變)
+function updatePathColor() {
+    if (capColorPath) capColorPath.set('fill', colorCap.value);
+    if (bodyColorPath) bodyColorPath.set('fill', colorBody.value);
+    if (handleColorPath) handleColorPath.set('fill', colorHandle.value);
+    canvas.renderAll();
+}
+colorBody.addEventListener("input", updatePathColor);
+colorCap.addEventListener("input", updatePathColor);
+colorHandle.addEventListener("input", updatePathColor);
+
+// ... (其他函數保持不變) ...
+document.addEventListener('DOMContentLoaded', () => {
+    if (bottleImg.complete) {
+        resizeAndInitialize();
+    } else {
+        bottleImg.onload = resizeAndInitialize;
+    }
+    window.addEventListener("resize", () => {
+        canvas.renderAll();
+    });
+});
