@@ -1,4 +1,4 @@
-// draw.js (最終修正版：使用精確計算的固定偏移量)
+// draw.js (最終版：零偏移，完全依賴 1024x1024 內部畫布和 CSS 對齊)
 
 // --------------------------------------------------------
 // 1. 定義 SVG 路徑字串 (保持不變)
@@ -19,40 +19,25 @@ let bodyColorPath, capColorPath, handleColorPath, designAreaClipPath;
 
 
 // --------------------------------------------------------
-// 3. 初始化 Canvas 尺寸與顏色層 (核心修正區)
+// 3. 初始化 Canvas 尺寸與顏色層 (核心修正區 - 零偏移)
 // --------------------------------------------------------
 function resizeAndInitialize() {
     const ACTUAL_SIZE = 1024; 
     
+    // 內部畫布固定為 1024x1024
     canvas.setWidth(ACTUAL_SIZE);
     canvas.setHeight(ACTUAL_SIZE);
     canvas.clear(); 
     
-    // ★★★ 最終精確偏移量：向左移動 94.6，向上移動 196.2 ★★★
-    const FINAL_OFFSET_X = -94.6; 
-    const FINAL_OFFSET_Y = -196.2; 
-
-    // 創建 Path 的輔助函數 (應用固定偏移)
+    // 創建 Path 的輔助函數 (不應用任何偏移)
     const createPath = (pathString, options) => {
-        // 使用 fromSVGPath 而不是 new fabric.Path 以確保 left/top 屬性從 (0,0) 開始
-        const path = new fabric.Path(pathString, {
+        return new fabric.Path(pathString, {
             ...options,
             scaleX: 1, scaleY: 1, 
             originX: 'left',
             originY: 'top',
-            // Path 本身可能會帶有初始的 left/top 座標，但我們以 Path 內的 M 座標為準，
-            // 這裡直接將計算出的偏移量應用於 Path 物件的 left/top 屬性。
-            left: options.left || 0 + FINAL_OFFSET_X, 
-            top: options.top || 0 + FINAL_OFFSET_Y
+            // 不設置 left/top，使用 Path 原始 M 座標
         });
-
-        // 由於 Path 預設是根據其 M 座標定位的，我們必須在創建後應用偏移
-        path.set({
-            left: path.left + FINAL_OFFSET_X,
-            top: path.top + FINAL_OFFSET_Y
-        });
-
-        return path;
     };
     
     // 1. 創建所有 Path
@@ -75,7 +60,7 @@ function resizeAndInitialize() {
 
 
 // --------------------------------------------------------
-// 5. 圖片上傳 (使用線稿的中心點座標)
+// 5. 圖片上傳 (使用 1024 畫布的中心點座標)
 // --------------------------------------------------------
 imgUpload.addEventListener("change", e => {
     // ... (FileReader 程式碼省略) ...
@@ -85,7 +70,7 @@ imgUpload.addEventListener("change", e => {
         img.set({
             uploaded: true, 
             scaleX: 0.25, scaleY: 0.25, 
-            // 保持設計圖案在瓶身設計區域 (約 450-800) 的中心
+            // 圖片和文字的起始座標應設置在 Path 繪製範圍的中心附近
             left: 512, 
             top: 550, 
             hasControls: true, 
@@ -101,7 +86,7 @@ imgUpload.addEventListener("change", e => {
 
 
 // --------------------------------------------------------
-// 6. 文字輸入 (使用線稿的中心點座標)
+// 6. 文字輸入 (使用 1024 畫布的中心點座標)
 // --------------------------------------------------------
 textInput.addEventListener("input", () => {
     canvas.getObjects().filter(obj => obj.textObject).forEach(obj => canvas.remove(obj));
