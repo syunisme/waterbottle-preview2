@@ -38,7 +38,7 @@ function resizeAndInitialize() {
     
     // ★★★ 精確偏移量 (只應用在 Group 上) ★★★
     // 讓整個 Path Group 從 (434, 296) 移到線稿起點 (340, 100)
-    const FINAL_OFFSET_X = -95; 
+    const FINAL_OFFSET_X = -55; 
     const FINAL_OFFSET_Y = -196; 
 
     // 創建 Path 的輔助函數 (不應用任何 left/top)
